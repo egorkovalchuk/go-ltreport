@@ -1,0 +1,302 @@
+package reportdata
+
+import (
+	"fmt"
+	"time"
+)
+
+// Config configuration stucture
+type Config struct {
+	//Имя файла
+	ReportFilename string `json:"ReportFilename"`
+	//Маска даты
+	ReportMask string `json:"ReportMask"`
+	//Включение выкладнки на конфлюенс
+	ReportConfluenceOn bool `json:"ReportConfluenceOn"`
+	//Адрес конфлюенса
+	ReportConfluenceURL string `json:"ReportConfluenceURL"`
+	//Ид куда пишем данные
+	ReportConfluenceId string `json:"ReportConfluenceId"`
+	//Спейс конфлюенса
+	ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
+	ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
+	ReportConfluencePass  string `json:"ReportConfluencePass"`
+	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
+	ReportOn              struct {
+		//Включить отчет из Jmeter
+		ReportJmeter bool `json:"ReportJmeter"`
+		//Включить отчет из FSM
+		ReportIM bool `json:"ReportIM"`
+		//Включить отчет по Сценариям
+		ReportScenario bool `json:"ReportScenario"`
+		//Включить отчет по дашбордам
+		ReportDash bool `json:"ReportDash"`
+	} `json:"ReportOn"`
+	JmeterLoginInflux string `json:"JmeterLoginInflux"`
+	JmeterPassinflux  string `json:"JmeterPassInflux"`
+	//Подключение к инфлюксу jmeter
+	JmeterInflux string `json:"JmeterInflux"`
+	//запрос
+	JmeterQuery string `json:"JmeterQuery"`
+	//группировка
+	JmeterQueryGroup string `json:"JmeterQueryGroup"`
+	//Описание полей
+	JmeterQueryField []struct {
+		//имя поля
+		Name string `json:"Name"`
+		//Описание
+		Description string `json:"Description"`
+	} `json:"JmeterQueryField"`
+	//Тестовые сценари с порогами по ошибкам
+	JmeterQueryThreshold []struct {
+		//имя сценария
+		Name string `json:"Name"`
+		//Поле по которому смотрим пороги
+		ErrorField string `json:"ErrorField"`
+		//порог
+		Threshold int `json:"Threshold"`
+		//Описание порога
+		Description string `json:"Description"`
+	} `json:"JmeterQueryThreshold"`
+	JmeterQueryScenario      string              `json:"JmeterQueryScenario"`
+	JmeterQueryScnrGroup     string              `json:"JmeterQueryScnrGroup"`
+	JmeterQueryScnrField     []JmeterQScnrFieldS `json:"JmeterQueryScnrField"`
+	JmeterQueryScnrThreshold []struct {
+		//имя сценария
+		Name string `json:"Name"`
+		//имя нити
+		NameThread string `json:"NameThread"`
+		//Поле по которому смотрим порогиN
+		ErrorField string `json:"ErrorField"`
+		//Статус на Jmeter
+		Statut string `json:"Statut"`
+		//порог
+		Threshold int `json:"Threshold"`
+		//Описание порога
+		Description string `json:"Description"`
+	} `json:"JmeterQueryScnrThreshold"`
+	LoginFSM    string `json:"LoginFSM"`
+	PassFSM     string `json:"PassFSM"`
+	Fsmconnect  string `json:"FSMConnect"`
+	Fsmtu       string `json:"FSMTU"`
+	Grafanadash []struct {
+		Name string `json:"Name"`
+		// авторизация на графане
+		AuthHeader string `json:"AuthHeader"`
+		//ссылка на даш
+		Urldash string `json:"UrlDash"`
+		//ссылка на панель
+		Urlpanel string `json:"UrlPanel"`
+		//Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+		Urlimg string `json:"UrlImg"`
+		//запрос данных для даша
+		Query string `json:"Query"`
+		//Порог для запроса
+		Threshold int `json:"Threshold"`
+		//Описание порога
+		ThDescription string `json:"ThDescription"`
+		//ссылка на запрос данных, смотреть в графане
+		UrlQuery string `json:"UrlQuery"`
+		//группировка
+		UrlQueryGroup string `json:"UrlQueryGroup"`
+		Size          struct {
+			Width  int
+			Height int
+		}
+	} `json:"GrafanaDash"`
+}
+
+// Вынесена структар из конфига
+type JmeterQScnrFieldS struct {
+	//имя поля
+	Name string `json:"Name"`
+	//Описание
+	Description string `json:"Description"`
+}
+
+//структура influx type 1
+type Mean struct {
+	Results []struct {
+		StatementID int `json:"statement_id"`
+		Series      []struct {
+			Name string `json:"name"`
+			Tags struct {
+				Transaction string `json:"transaction"`
+				Suite       string `json:"suite"`
+				Statut      string `json:"statut"`
+				Application string `json:"application"`
+			} `json:"tags"`
+			Columns []string        `json:"columns"`
+			Values  [][]interface{} `json:"values"`
+		} `json:"series"`
+	} `json:"results"`
+}
+
+//структура influx type 2 для сценария
+type MeanScenario struct {
+	Results []struct {
+		StatementID int `json:"statement_id"`
+		Series      []struct {
+			Name string `json:"name"`
+			Tags struct {
+				Transaction string `json:"transaction"`
+				Suite       string `json:"suite"`
+				Statut      string `json:"statut"`
+				Application string `json:"application"`
+			} `json:"tags"`
+			Columns []string        `json:"columns"`
+			Values  [][]interface{} `json:"values"`
+		} `json:"series"`
+	} `json:"results"`
+}
+
+//для преобразования типа ответа инфлюкса
+type SField struct {
+	NameCol   string
+	ValFloat  float64
+	ValInt    int64
+	ValString string
+	ValTime   int64
+}
+
+//Структруа ответа инфлюкса по тестам
+//Устарело, смотри LTTestDinamic
+type LTTest struct {
+	NameTest   string
+	Rate       float64
+	Avg        float64
+	Errpct     float64
+	Percentile float64
+	Maxlatency float64
+}
+
+//Структруа ответа инфлюкса по тестам
+type LTTestDinamic struct {
+	NameTest string
+	Field    []YField
+}
+
+//для хранения поля ответа
+type YField struct {
+	Name        string
+	Value       float64
+	Description string
+	Statut      string
+}
+
+//для хранения ключей и создания карты по порогам и их описания
+//для сценариев, отличие в статусе сценария (Statut)
+type KeyField struct {
+	//порог
+	Value int
+	//Описания порога
+	Description string
+	//Статус сценария на Jmeter
+	Statut string
+}
+
+//сруктура ошибок для анализа
+type LTError struct {
+	Name        string
+	Threshold   int
+	Description string
+}
+
+//Структура сценария
+//Устарело, смотри ScenarioDinamic
+type Scenario struct {
+	Tags       string
+	Percentile float64
+	Maxlatency float64
+	Rate       float64
+	RateError  float64
+}
+
+//Структура с сценариев динамическим запросом
+type ScenarioDinamic struct {
+	NameTest   string
+	NameThread string
+	Field      []YField
+}
+
+//сруктура для вывода графиков
+type LTGrag struct {
+	Name        string
+	Threshold   int
+	Description string
+	ContentType string
+	UrlDash     string
+	Size        struct {
+		Width  int
+		Height int
+	}
+}
+
+func BeginningOfDay() time.Time {
+	t := time.Now()
+	return time.Date(t.Year(), t.Month(), t.Day(), 9, 0, 0, 0, time.Local)
+}
+
+// EndOfDay end of day
+func EndOfDay() time.Time {
+	t := time.Now()
+	return time.Date(t.Year(), t.Month(), t.Day(), 17, 59, 59, int(time.Second-time.Nanosecond), time.Local)
+}
+
+func BeginningOfHour() time.Time {
+	t := time.Now()
+	now := t.Hour()
+	return time.Date(t.Year(), t.Month(), t.Day(), now-1, 0, 0, 0, time.Local)
+}
+
+// EndOfDay end of day
+func EndOfHour() time.Time {
+	t := time.Now()
+	now := t.Hour()
+	return time.Date(t.Year(), t.Month(), t.Day(), now-1, 59, 59, int(time.Second-time.Nanosecond), time.Local)
+}
+
+func AddMap(m map[string]map[string]KeyField, TestName, ErrorField string, val KeyField) map[string]map[string]KeyField {
+	mm, ok := m[TestName]
+	if !ok {
+		mm = make(map[string]KeyField)
+		m[TestName] = mm
+	}
+	mm[ErrorField] = val
+
+	return m
+}
+
+func AddMapS(m map[string]map[string]ScenarioDinamic, TestName, NameThread string, val ScenarioDinamic) map[string]map[string]ScenarioDinamic {
+	mm, ok := m[TestName]
+	if !ok {
+		mm = make(map[string]ScenarioDinamic)
+		m[TestName] = mm
+	}
+	mm[NameThread] = val
+
+	return m
+}
+
+//Методы для типа ScenarioDinamic
+func (p *ScenarioDinamic) SetApplication(NameTest string) {
+	p.NameTest = NameTest
+}
+func (p *ScenarioDinamic) SetThread(NameThread string) {
+	p.NameThread = NameThread
+}
+
+func (p *ScenarioDinamic) SeField(YF []YField) {
+	for _, i := range YF {
+		p.Field = append(p.Field, i)
+	}
+}
+
+func Helpstart() {
+	fmt.Println("Use -v gor get version")
+	fmt.Println("Use -d start with debug mode")
+	fmt.Println("Use -c start with users config")
+	fmt.Println("Use -hour to generate an hourly report ")
+	fmt.Println("Use -lf start with Login FSM")
+	fmt.Println("Use -lp start with Password FSM")
+}

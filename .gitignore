@@ -1,0 +1,7 @@
+ltreport.log
+go-ltreport.exe
+*.pdf
+*.png
+config.json
+.vscode/launch.json
+
