@@ -26,24 +26,28 @@ const (
 	// логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.1.4"
+	versionutil  = "0.1.5"
 	a4height     = 297
 	a4width      = 210
 )
 
 var (
-	//конфиг
+	//Configuration
 	cfg reportdata.Config
 	//FSM connect
 	LoginFSM string
 	PassFSM  string
+	//Proxy
+	//Confluence proxy
+	ConflProxy string
+
 	//режим работы сервиса(дебаг мод)
 	debugm bool
 	//Запись в лог
 	filer *os.File
 	//запрос помощи
 	help bool
-	//по часовая
+	//по часовой отчет за прошедший час
 	hour bool
 	//PDF
 	pdf *gofpdf.Fpdf
@@ -85,6 +89,24 @@ func readconf(cfg *reportdata.Config, confname string) {
 	file.Close()
 }
 
+func redefinitionconf() {
+
+	//Замена переменных для FSM
+	//переместить?
+	if LoginFSM != "" {
+		cfg.LoginFSM = LoginFSM
+	}
+	if PassFSM != "" {
+		cfg.PassFSM = PassFSM
+	}
+
+	//Замена переменных Proxy
+	if ConflProxy != "" {
+		cfg.ReportConfluenceProxy = ConflProxy
+	}
+
+}
+
 //Запись ошибки с прекращением выполнения
 func ProcessError(err error) {
 	log.Println(err)
@@ -109,17 +131,20 @@ func main() {
 	log.Println("- - - - - - - - - - - - - - -")
 	log.Println("Start report")
 
-	flag.BoolVar(&debugm, "d", false, "a bool")
-	flag.BoolVar(&version, "v", false, "a bool")
+	flag.BoolVar(&debugm, "d", false, "Start debug mode")
+	flag.BoolVar(&version, "v", false, "Version")
 	var confname string
-	flag.StringVar(&confname, "c", confFileName, "")
-	flag.StringVar(&LoginFSM, "lf", "", "")
-	flag.StringVar(&PassFSM, "lp", "", "")
-	flag.BoolVar(&help, "h", false, "a bool")
-	flag.BoolVar(&hour, "hour", false, "a bool")
+	flag.StringVar(&confname, "c", confFileName, "start with users config")
+	flag.StringVar(&LoginFSM, "fsmlogin", "", "HP Service Manager Login")
+	flag.StringVar(&PassFSM, "fsmpass", "", "HP Service Manager Password")
+	flag.StringVar(&ConflProxy, "conflproxy", "", "Confluence proxy, use http://user:password@url:port ")
+	flag.BoolVar(&help, "h", false, "Use -h for help")
+	flag.BoolVar(&hour, "hour", false, "Generate by hourly report")
 	flag.Parse()
 
 	readconf(&cfg, confname)
+	//Замена на приоритетный конфиг из командной строки
+	redefinitionconf()
 
 	//Получение помощи
 	if help {
@@ -135,14 +160,16 @@ func main() {
 
 	ProcessDebug("Start with debug mode")
 
+	StartReport()
+
+}
+
+func StartReport() {
+
 	currentTime := time.Now()
 
 	//Формирование имени выхожного файла
-	//var reportfilename string
 	reportfilename := cfg.ReportFilename + currentTime.Format(cfg.ReportMask)
-
-	fmt.Println("Start report")
-	log.Println("Start report")
 
 	if hour {
 		log.Println("Start group by hour")
@@ -153,14 +180,8 @@ func main() {
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10) + `000ms `
 	}
 
-	//Замена переменных для FSM
-	if LoginFSM == "" {
-		LoginFSM = cfg.LoginFSM
-	}
-	if PassFSM == "" {
-		PassFSM = cfg.PassFSM
-	}
-
+	fmt.Println("Start report")
+	log.Println("Start report")
 	ProcessDebug("File name " + reportfilename)
 
 	//Инициализация pdf
@@ -188,7 +209,9 @@ func main() {
 	}
 
 	//Формирование отчета
+	//Обязательно, поэтому не исключаем
 	ReportProblemPDF()
+
 	//Включение графиков
 	if cfg.ReportOn.ReportDash {
 		GrafanaReportPDF()
@@ -224,9 +247,9 @@ func ReportInfluxPDF() {
 	pdf.SetY(pdf.GetY() + 10)
 	pdf.SetFont("Times", "B", 16)
 	pdf.CellFormat(195, 7, "Report test", "0", 0, "CM", false, 0, "")
+	pdf.SetY(pdf.GetY() + 7)
 
 	for _, i := range LTTest_dinamic {
-		//pdf.SetY(pdf.GetY() + 7)
 		pdf.SetFont("Times", "B", 10)
 		pdf.CellFormat(195, 7, i.NameTest, "0", 0, "CM", false, 0, "")
 

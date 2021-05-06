@@ -12,6 +12,9 @@ Use -c start with users config
 
 Use -hour to generate an hourly report
 
-Use -lf start with Login FSM
+Use -fsmlogin start with Login FSM
 
-Use -lp start with Password FSM
+Use -fsmpass start with Password FSM
+
+Use -conflproxy start with proxy for connection to Confluence
+

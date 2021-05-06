@@ -297,6 +297,7 @@ func Helpstart() {
 	fmt.Println("Use -d start with debug mode")
 	fmt.Println("Use -c start with users config")
 	fmt.Println("Use -hour to generate an hourly report ")
-	fmt.Println("Use -lf start with Login FSM")
-	fmt.Println("Use -lp start with Password FSM")
+	fmt.Println("Use -fsmlogin start with Login FSM")
+	fmt.Println("Use -fsmpass start with Password FSM")
+	fmt.Println("Use -conflproxy start with proxy for connection to Confluence")
 }
