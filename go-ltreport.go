@@ -26,7 +26,7 @@ const (
 	// логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.1.5"
+	versionutil  = "0.1.5.1"
 	a4height     = 297
 	a4width      = 210
 )
@@ -220,6 +220,7 @@ func StartReport() {
 	//Прогрузка общенй информации
 	if cfg.ReportOn.ReportJmeter {
 		ReportInfluxPDF()
+		ReportProblemScenPDF()
 		ReportInfluxScrnPDF()
 	}
 
@@ -236,9 +237,28 @@ func StartReport() {
 
 func ReportProblemPDF() {
 	for _, i := range Problems {
-		pdf.SetFont("Times", "", 10)
-		pdf.SetY(pdf.GetY() + 7)
-		pdf.CellFormat(65, 7, i.Description, "", 0, "LM", false, 0, "")
+		if i.Type == "Grafana" || i.Type == "" {
+			pdf.SetFont("Times", "", 10)
+			pdf.SetY(pdf.GetY() + 7)
+			pdf.CellFormat(65, 7, i.Description, "", 0, "LM", false, 0, "")
+		}
+	}
+}
+
+func ReportProblemScenPDF() {
+	pdf.AddPage()
+
+	pdf.SetY(pdf.GetY() + 10)
+	pdf.SetFont("Times", "B", 16)
+	pdf.CellFormat(195, 7, "Report problem Jmeter", "0", 0, "CM", false, 0, "")
+	pdf.SetY(pdf.GetY() + 7)
+
+	for _, i := range Problems {
+		if i.Type == "Jmeter" {
+			pdf.SetFont("Times", "", 10)
+			pdf.SetY(pdf.GetY() + 7)
+			pdf.CellFormat(65, 7, i.Description, "", 0, "LM", false, 0, "")
+		}
 	}
 }
 func ReportInfluxPDF() {
@@ -479,9 +499,9 @@ func InfluxErrorJmeter() {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range")
+		log.Println("HTTP Status is in the 2xx range " + request)
 	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode))
+		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 	}
 
 	if resp.StatusCode == 200 {
@@ -541,9 +561,9 @@ func InfluxJmeterScenarioOld() {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range")
+		log.Println("HTTP Status is in the 2xx range " + request)
 	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode))
+		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 	}
 
 	infjson, _ := reportdata.JsonINfluxParse(resp)
@@ -573,9 +593,9 @@ func InfluxJmeterScenarioOld() {
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range")
+			log.Println("HTTP Status is in the 2xx range " + request)
 		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode))
+			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 		}
 
 		var avgcount float64
@@ -602,9 +622,9 @@ func InfluxJmeterScenarioOld() {
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range")
+			log.Println("HTTP Status is in the 2xx range " + request)
 		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode))
+			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 		}
 
 		var avgcountr float64
@@ -644,9 +664,9 @@ func InfluxJmeterScenario() {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range")
+		log.Println("HTTP Status is in the 2xx range " + request)
 	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode))
+		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 	}
 
 	if resp.StatusCode == 200 {
@@ -708,7 +728,7 @@ func InfluxJmeterScenario() {
 
 							if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
 								ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value))}
+								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 								Problems = append(Problems, p)
 
 							}
@@ -726,7 +746,7 @@ func InfluxJmeterScenario() {
 
 							if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
 								ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value))}
+								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 								Problems = append(Problems, p)
 
 							}
@@ -743,7 +763,7 @@ func InfluxJmeterScenario() {
 
 							if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
 								ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value))}
+								p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 								Problems = append(Problems, p)
 
 							}
@@ -797,9 +817,9 @@ func GrafanaReport() {
 		}
 
 		if rsp.StatusCode >= 200 && rsp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range")
+			log.Println("HTTP Status is in the 2xx range " + request)
 		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(rsp.StatusCode))
+			log.Println("HTTP Status error " + strconv.Itoa(rsp.StatusCode) + " " + request)
 		}
 
 		// проверяем получение картинки, статус 200
@@ -847,9 +867,9 @@ func GrafanaReport() {
 			}
 
 			if rsp_inf.StatusCode >= 200 && rsp_inf.StatusCode <= 299 {
-				log.Println("HTTP Status is in the 2xx range")
+				log.Println("HTTP Status is in the 2xx range " + request)
 			} else {
-				log.Println("HTTP Status error " + strconv.Itoa(rsp_inf.StatusCode))
+				log.Println("HTTP Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request)
 			}
 
 			var percentile float64
@@ -865,7 +885,7 @@ func GrafanaReport() {
 			}
 
 			if percentile > float64(i.Threshold) {
-				p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + " " + strconv.Itoa(i.Threshold) + " in test " + i.Name + " current " + strconv.Itoa(int(percentile)) + "%"}
+				p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + " " + strconv.Itoa(i.Threshold) + " in test " + i.Name + " current " + strconv.Itoa(int(percentile)) + "%", Type: "Grafana"}
 				Problems = append(Problems, p)
 			}
 
@@ -918,6 +938,14 @@ func ReportDownload(reportfilename string) {
 	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Expand: []string{"children.page"}})
 	if err != nil {
 		log.Println(err)
+		log.Println(JsonCont)
+		return
+	}
+
+	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Limit: 250, Expand: []string{"children.page"}})
+	if err != nil {
+		log.Println(err)
+		log.Println(JsonConC)
 		return
 	}
 
@@ -926,7 +954,8 @@ func ReportDownload(reportfilename string) {
 
 	var IdChild string
 
-	for _, i := range JsonCont.Children.Page.Results {
+	//поиск по детям GetContentChildPage
+	for _, i := range JsonConC.Results {
 		if reportname == i.Title {
 			IdChild = i.ID
 			ProcessDebug(i.Title + ", id=" + IdChild)
@@ -934,6 +963,16 @@ func ReportDownload(reportfilename string) {
 			IdChild = ""
 		}
 	}
+
+	//Выключил, так как прямой поиск по детям
+	/*for _, i := range JsonCont.Children.Page.Results {
+		if reportname == i.Title {
+			IdChild = i.ID
+			ProcessDebug(i.Title + ", id=" + IdChild)
+		} else {
+			IdChild = ""
+		}
+	}*/
 
 	if IdChild == "" {
 		ProcessDebug("Create child page " + reportname)
@@ -962,6 +1001,7 @@ func ReportDownload(reportfilename string) {
 
 		JsonContC, err := confl.CreateContent(&data)
 		if err != nil {
+
 			log.Println(err)
 			return
 		}
