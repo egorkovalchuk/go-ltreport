@@ -200,6 +200,7 @@ type LTError struct {
 	Name        string
 	Threshold   int
 	Description string
+	Type		string
 }
 
 //Структура сценария

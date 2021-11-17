@@ -111,6 +111,38 @@ func (confl *API) GetContent(id string, param ContentQuery) (*ConflType, error) 
 
 }
 
+func (confl *API) GetContentChildPage(id string, param ContentQuery) (*ConflTypeA, error) {
+	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/page")
+
+	if err != nil {
+		return nil, errors.New("Url generation error")
+	}
+
+	log.Println("Load " + ep.String())
+	ep.RawQuery = addContentQueryParams(param).Encode()
+
+	req, err := http.NewRequest("GET", ep.String(), nil)
+	if err != nil {
+		return nil, errors.New("Error creating request to " + ep.String())
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+
+	res, err := confl.Request(req)
+	if err != nil {
+		return nil, err
+	}
+
+	JsonCont, err := confl.GetJsonA(res)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return JsonCont, nil
+
+}
+
 func (confl *API) GetJson(content []byte) (*ConflType, error) {
 
 	var JsonContent ConflType
