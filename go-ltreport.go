@@ -68,7 +68,8 @@ var (
 	//Массив графиков и порогов
 	LTGrafs []reportdata.LTGrag
 	//время формирования отчетов
-	timeperiod string
+	timeperiod            string
+	timeperiod_prometheus string
 )
 
 //чтение конфига
@@ -174,10 +175,12 @@ func StartReport() {
 	if hour {
 		log.Println("Start group by hour")
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10) + `000ms `
+		timeperiod_prometheus = `&start=` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `&end=` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10)
 		reportfilename = reportfilename + "_" + strconv.Itoa(reportdata.BeginningOfHour().Local().Hour())
 	} else {
 		log.Println("Start group by day")
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10) + `000ms `
+		timeperiod_prometheus = `&start=` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `&end=` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10)
 	}
 
 	fmt.Println("Start report")
@@ -849,7 +852,14 @@ func GrafanaReport() {
 			defer rsp.Body.Close()
 			defer file.Close()
 
-			request_inf := i.UrlQuery + url.QueryEscape(i.Query+" AND "+timeperiod+i.UrlQueryGroup)
+			request_inf := ""
+			if i.SourceType == 2 {
+				// получение данные из прометеуса
+				request_inf = i.UrlQuery + url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus
+			} else {
+				// получение данные из инфлюкса
+				request_inf = i.UrlQuery + url.QueryEscape(i.Query+" AND "+timeperiod+i.UrlQueryGroup)
+			}
 			ProcessDebug("Request " + request_inf)
 
 			resp_inf, err := http.NewRequest("GET", request_inf, nil)
@@ -867,20 +877,26 @@ func GrafanaReport() {
 			}
 
 			if rsp_inf.StatusCode >= 200 && rsp_inf.StatusCode <= 299 {
-				log.Println("HTTP Status is in the 2xx range " + request)
+				log.Println("HTTP Status is in the 2xx range " + request_inf)
 			} else {
-				log.Println("HTTP Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request)
+				log.Println("HTTP Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request_inf)
 			}
 
 			var percentile float64
-
 			if rsp_inf.StatusCode == 200 {
-				infjson_child, err := reportdata.JsonINfluxParse(rsp_inf)
-
-				if err == nil {
-
-					percentile = reportdata.JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
-
+				if i.SourceType == 2 {
+					var prom reportdata.PrometheusResponse
+					err = prom.JsonPrometheusParse(rsp_inf)
+					if err == nil {
+						percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
+					} else {
+						log.Println(err)
+					}
+				} else {
+					infjson_child, err := reportdata.JsonINfluxParse(rsp_inf)
+					if err == nil {
+						percentile = reportdata.JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
+					}
 				}
 			}
 
@@ -935,13 +951,14 @@ func ReportDownload(reportfilename string) {
 		return
 	}
 	//Получение описание базовой страницы
+	ProcessDebug("GetContent")
 	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Expand: []string{"children.page"}})
 	if err != nil {
 		log.Println(err)
 		log.Println(JsonCont)
 		return
 	}
-
+	ProcessDebug("GetContentChildPage")
 	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Limit: 250, Expand: []string{"children.page"}})
 	if err != nil {
 		log.Println(err)

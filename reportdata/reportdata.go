@@ -89,6 +89,8 @@ type Config struct {
 		Urlpanel string `json:"UrlPanel"`
 		//Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
 		Urlimg string `json:"UrlImg"`
+		//Источник данных
+		SourceType int `json:"SourceType"`
 		//запрос данных для даша
 		Query string `json:"Query"`
 		//Порог для запроса
@@ -200,7 +202,7 @@ type LTError struct {
 	Name        string
 	Threshold   int
 	Description string
-	Type		string
+	Type        string
 }
 
 //Структура сценария
