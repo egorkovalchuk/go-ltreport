@@ -45,7 +45,7 @@ func SetDebug(state bool) {
 // Слямзино и переделано
 // Copy Virtomize/confluence-go-api
 // Конструктор
-func NewAPI(location string, username string, token string, proxyurl string) (*API, error) {
+func NewAPI(location string, username string, password string, token string, proxyurl string) (*API, error) {
 	if len(location) == 0 {
 		return nil, errors.New("url empty")
 	}
@@ -58,8 +58,9 @@ func NewAPI(location string, username string, token string, proxyurl string) (*A
 
 	a := new(API)
 	a.Url = u
-	a.token = token
+	a.password = password
 	a.username = username
+	a.token = token
 
 	tr := &http.Transport{
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: false},

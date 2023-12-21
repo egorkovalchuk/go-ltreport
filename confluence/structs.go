@@ -7,10 +7,11 @@ import (
 
 // API is the main api data structure
 type API struct {
-	Url             *url.URL
-	client          *http.Client
-	username, token string
-	debug           bool
+	Url                *url.URL
+	client             *http.Client
+	username, password string
+	token              string
+	debug              bool
 }
 
 //структура запроса (взято с доки)

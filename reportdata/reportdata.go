@@ -21,6 +21,7 @@ type Config struct {
 	ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
 	ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
 	ReportConfluencePass  string `json:"ReportConfluencePass"`
+	ReportConfluenceToken string `json:"ReportConfluenceToken"`
 	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
 	ReportOn              struct {
 		//Включить отчет из Jmeter
@@ -30,7 +31,8 @@ type Config struct {
 		//Включить отчет по Сценариям
 		ReportScenario bool `json:"ReportScenario"`
 		//Включить отчет по дашбордам
-		ReportDash bool `json:"ReportDash"`
+		ReportDash       bool `json:"ReportDash"`
+		ReportClickHouse bool `json:"ClickHouse"`
 	} `json:"ReportOn"`
 	JmeterLoginInflux string `json:"JmeterLoginInflux"`
 	JmeterPassinflux  string `json:"JmeterPassInflux"`
@@ -303,4 +305,5 @@ func Helpstart() {
 	fmt.Println("Use -fsmlogin start with Login FSM")
 	fmt.Println("Use -fsmpass start with Password FSM")
 	fmt.Println("Use -conflproxy start with proxy for connection to Confluence")
+	fmt.Println("Use -start and -end for generate a report on an arbitrary date ")
 }

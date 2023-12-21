@@ -18,7 +18,7 @@ func (confl *API) Request(req *http.Request) ([]byte, error) {
 	req.Header.Add("Accept", "application/json, */*")
 
 	// only auth if we can auth
-	if (confl.username != "") || (confl.token != "") {
+	if (confl.token != "") || ((confl.username != "") && (confl.password != "")) {
 		confl.Auth(req)
 	}
 
@@ -104,8 +104,10 @@ func (confl *API) SendContentAttachmentRequest(ep *url.URL, attachmentName strin
 func (confl *API) Auth(req *http.Request) {
 	//Supports unauthenticated access to confluence:
 	//if username and token are not set, do not add authorization header
-	if confl.username != "" && confl.token != "" {
-		req.SetBasicAuth(confl.username, confl.token)
+	if confl.username != "" && confl.password != "" {
+		req.SetBasicAuth(confl.username, confl.password)
+	} else if confl.token != "" {
+		req.Header.Set("Authorization", "Bearer "+confl.token)
 	}
 }
 

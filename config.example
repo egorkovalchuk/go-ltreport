@@ -7,6 +7,11 @@
 	"ReportConfluenceURL":"https://confluence.com/",
 	"ReportConfluenceId":"926291954",
 	"ReportConfluenceSpace":"space",
+	"ReportConfluenceLogin":"login",
+    "ReportConfluencePass":"pass",
+	//авторизация по токену
+	"ReportConfluenceToken":"token",
+	"ReportConfluenceProxy":"",
 	"ReportOn": { 
 			//Включить отчет из Jmeter
 			"ReportJmeter": true,
@@ -15,7 +20,8 @@
             //Включить отчет по Сценариям
 			"ReportScenario": true,
             //Включить отчет по дашбордам
-			"ReportDash": true
+			"ReportDash": true,
+			"ClickHouse": false
 			},
 	"JmeterInflux" :   "http://10.10.10.1:8086",
 	"LoginInflux" :   "",

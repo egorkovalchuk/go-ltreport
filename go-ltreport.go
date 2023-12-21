@@ -26,9 +26,11 @@ const (
 	// логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.1.5.1"
-	a4height     = 297
-	a4width      = 210
+	versionutil  = "0.2.0.1"
+	//0.2.0.0 Add any time period
+	//0.2.0.1 Add token for confluence
+	a4height = 297
+	a4width  = 210
 )
 
 var (
@@ -49,6 +51,8 @@ var (
 	help bool
 	//по часовой отчет за прошедший час
 	hour bool
+	// Delete temp files
+	rmtmpfile bool
 	//PDF
 	pdf *gofpdf.Fpdf
 	//ошибки
@@ -70,6 +74,11 @@ var (
 	//время формирования отчетов
 	timeperiod            string
 	timeperiod_prometheus string
+	//Пользовательский период формировани
+	EndDateStr   string
+	StartDateStr string
+	EndDate      time.Time
+	StartDate    time.Time
 )
 
 //чтение конфига
@@ -121,6 +130,33 @@ func ProcessDebug(logtext interface{}) {
 	}
 }
 
+//Применение шаблона к датам по произвольному периоду
+func DateProcess() bool {
+	if StartDateStr != "" && EndDateStr == "" {
+		fmt.Println("Error. Missing second parameter \"end\"")
+		return false
+	}
+	if StartDateStr == "" && EndDateStr != "" {
+		fmt.Println("Error. Missing second parameter \"start\"")
+		return false
+	}
+	if StartDateStr != "" && EndDateStr != "" {
+		if t, err := time.ParseInLocation("2006.01.02 15:04", StartDateStr, time.Now().Location()); err != nil {
+			fmt.Println("Error. Use format date for -start \"2023.12.31 15:00\"")
+			return false
+		} else {
+			StartDate = t
+		}
+		if t, err := time.ParseInLocation("2006.01.02 15:04", EndDateStr, time.Now().Location()); err != nil {
+			fmt.Println("Error. Use format date for -end \"2023.12.31 15:00\"")
+			return false
+		} else {
+			EndDate = t
+		}
+	}
+	return true
+}
+
 func main() {
 
 	//start program
@@ -141,6 +177,9 @@ func main() {
 	flag.StringVar(&ConflProxy, "conflproxy", "", "Confluence proxy, use http://user:password@url:port ")
 	flag.BoolVar(&help, "h", false, "Use -h for help")
 	flag.BoolVar(&hour, "hour", false, "Generate by hourly report")
+	flag.BoolVar(&rmtmpfile, "rm", false, "Remove temp files")
+	flag.StringVar(&StartDateStr, "start", "", "Start date of report generation in format 2006.01.31 15:00")
+	flag.StringVar(&EndDateStr, "end", "", "End date of report generation in format 2006.01.31 15:00")
 	flag.Parse()
 
 	readconf(&cfg, confname)
@@ -159,8 +198,12 @@ func main() {
 		return
 	}
 
-	ProcessDebug("Start with debug mode")
+	//Проверка по датам
+	if !DateProcess() {
+		return
+	}
 
+	ProcessDebug("Start with debug mode")
 	StartReport()
 
 }
@@ -177,6 +220,11 @@ func StartReport() {
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10) + `000ms `
 		timeperiod_prometheus = `&start=` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `&end=` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10)
 		reportfilename = reportfilename + "_" + strconv.Itoa(reportdata.BeginningOfHour().Local().Hour())
+	} else if !StartDate.IsZero() && !EndDate.IsZero() {
+		log.Println("Start group arbitrary period")
+		timeperiod = ` time >= ` + strconv.FormatInt(StartDate.Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(EndDate.Unix(), 10) + `000ms `
+		timeperiod_prometheus = `&start=` + strconv.FormatInt(StartDate.Unix(), 10) + `&end=` + strconv.FormatInt(EndDate.Unix(), 10)
+		reportfilename = reportfilename + "_" + "00" + "_" + strconv.Itoa(StartDate.Local().Hour())
 	} else {
 		log.Println("Start group by day")
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10) + `000ms `
@@ -425,6 +473,14 @@ func GrafanaReportPDF() {
 		tmpheight = float64(i.Size.Height)
 
 		defer file.Close()
+		file.Close()
+
+		if rmtmpfile {
+			e := os.Remove(file.Name())
+			if e != nil {
+				log.Println(err)
+			}
+		}
 
 	}
 }
@@ -797,6 +853,8 @@ func GrafanaReport() {
 		var timewrap string
 		if hour {
 			timewrap = "&from=" + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + "000&to=" + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10) + "000"
+		} else if !StartDate.IsZero() && !EndDate.IsZero() {
+			timewrap = "&from=" + strconv.FormatInt(StartDate.Unix(), 10) + "000&to=" + strconv.FormatInt(EndDate.Unix(), 10) + "000"
 		} else {
 			timewrap = "&from=" + strconv.FormatInt(beginday, 10) + "000&to=" + strconv.FormatInt(endday, 10) + "000"
 		}
@@ -820,9 +878,9 @@ func GrafanaReport() {
 		}
 
 		if rsp.StatusCode >= 200 && rsp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range " + request)
+			log.Println("Request success")
 		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(rsp.StatusCode) + " " + request)
+			log.Println("Request error " + strconv.Itoa(rsp.StatusCode) + " " + request)
 		}
 
 		// проверяем получение картинки, статус 200
@@ -877,9 +935,9 @@ func GrafanaReport() {
 			}
 
 			if rsp_inf.StatusCode >= 200 && rsp_inf.StatusCode <= 299 {
-				log.Println("HTTP Status is in the 2xx range " + request_inf)
+				log.Println("Request success")
 			} else {
-				log.Println("HTTP Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request_inf)
+				log.Println("Request Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request_inf)
 			}
 
 			var percentile float64
@@ -901,7 +959,7 @@ func GrafanaReport() {
 			}
 
 			if percentile > float64(i.Threshold) {
-				p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + " " + strconv.Itoa(i.Threshold) + " in test " + i.Name + " current " + strconv.Itoa(int(percentile)) + "%", Type: "Grafana"}
+				p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 				Problems = append(Problems, p)
 			}
 
@@ -936,6 +994,7 @@ func ReportIM() {
 
 }
 
+// Загрузка в джиру
 func ReportDownload(reportfilename string) {
 	//пробрасываем дебаг
 	confluence.DebugFlag = debugm
@@ -944,7 +1003,7 @@ func ReportDownload(reportfilename string) {
 
 	//Инициализация работы с конфленсом
 	//перенеммные потом вынески в конфиг
-	confl, err := confluence.NewAPI(cfg.ReportConfluenceURL, cfg.ReportConfluenceLogin, cfg.ReportConfluencePass, cfg.ReportConfluenceProxy)
+	confl, err := confluence.NewAPI(cfg.ReportConfluenceURL, cfg.ReportConfluenceLogin, cfg.ReportConfluencePass, cfg.ReportConfluenceToken, cfg.ReportConfluenceProxy)
 	if err != nil {
 		log.Println("Error connection to confluence")
 		log.Println(err)

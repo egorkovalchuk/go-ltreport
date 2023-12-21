@@ -1,13 +1,8 @@
-ltreport.log
-go-ltreport.exe
-*.pdf
-*.png
 *.log
 *.exe
 *.pdf
 *.png
 *.rar
 *.zip
-config.json
 .vscode/launch.json
-
+config.json
