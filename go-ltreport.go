@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/confluence"
@@ -21,16 +22,18 @@ import (
 )
 
 //Power by  Egor Kovalchuk
+//0.2.0.0 Add any time period
+//0.2.0.1 Add token for confluence
+//0.3.0.0 Add ClickHouse
+//0.3.0.1 Add PDF report CH
 
 const (
 	// логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.2.0.1"
-	//0.2.0.0 Add any time period
-	//0.2.0.1 Add token for confluence
-	a4height = 297
-	a4width  = 210
+	versionutil  = "0.3.0.1"
+	a4height     = 297
+	a4width      = 210
 )
 
 var (
@@ -74,11 +77,15 @@ var (
 	//время формирования отчетов
 	timeperiod            string
 	timeperiod_prometheus string
+	timeperiod_clickhouse string
 	//Пользовательский период формировани
 	EndDateStr   string
 	StartDateStr string
 	EndDate      time.Time
 	StartDate    time.Time
+
+	//Массив для ClickHouse
+	LTClickHouse []reportdata.ClickHouseJson
 )
 
 //чтение конфига
@@ -104,10 +111,10 @@ func redefinitionconf() {
 	//Замена переменных для FSM
 	//переместить?
 	if LoginFSM != "" {
-		cfg.LoginFSM = LoginFSM
+		cfg.ReportIM.LoginFSM = LoginFSM
 	}
 	if PassFSM != "" {
-		cfg.PassFSM = PassFSM
+		cfg.ReportIM.PassFSM = PassFSM
 	}
 
 	//Замена переменных Proxy
@@ -219,16 +226,19 @@ func StartReport() {
 		log.Println("Start group by hour")
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10) + `000ms `
 		timeperiod_prometheus = `&start=` + strconv.FormatInt(reportdata.BeginningOfHour().Unix(), 10) + `&end=` + strconv.FormatInt(reportdata.EndOfHour().Unix(), 10)
+		timeperiod_clickhouse = " timestamp>=toDateTime('" + reportdata.BeginningOfHour().Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + reportdata.EndOfHour().Format("2006-01-02 15:04:05") + "') "
 		reportfilename = reportfilename + "_" + strconv.Itoa(reportdata.BeginningOfHour().Local().Hour())
 	} else if !StartDate.IsZero() && !EndDate.IsZero() {
 		log.Println("Start group arbitrary period")
 		timeperiod = ` time >= ` + strconv.FormatInt(StartDate.Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(EndDate.Unix(), 10) + `000ms `
 		timeperiod_prometheus = `&start=` + strconv.FormatInt(StartDate.Unix(), 10) + `&end=` + strconv.FormatInt(EndDate.Unix(), 10)
+		timeperiod_clickhouse = " timestamp>=toDateTime('" + StartDate.Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + EndDate.Format("2006-01-02 15:04:05") + "') "
 		reportfilename = reportfilename + "_" + "00" + "_" + strconv.Itoa(StartDate.Local().Hour())
 	} else {
 		log.Println("Start group by day")
 		timeperiod = ` time >= ` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `000ms AND time <= ` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10) + `000ms `
 		timeperiod_prometheus = `&start=` + strconv.FormatInt(reportdata.BeginningOfDay().Unix(), 10) + `&end=` + strconv.FormatInt(reportdata.EndOfDay().Unix(), 10)
+		timeperiod_clickhouse = " timestamp>=toDateTime('" + reportdata.BeginningOfDay().Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + reportdata.EndOfDay().Format("2006-01-02 15:04:05") + "') "
 	}
 
 	fmt.Println("Start report")
@@ -259,6 +269,11 @@ func StartReport() {
 		GrafanaReport()
 	}
 
+	//Включение ClickHouse
+	if cfg.ReportOn.ReportClickHouse {
+		ClickHouseReport()
+	}
+
 	//Формирование отчета
 	//Обязательно, поэтому не исключаем
 	ReportProblemPDF()
@@ -266,6 +281,11 @@ func StartReport() {
 	//Включение графиков
 	if cfg.ReportOn.ReportDash {
 		GrafanaReportPDF()
+	}
+
+	//Включение ClickHouse
+	if cfg.ReportOn.ReportClickHouse {
+		ClickHouseReportPDF()
 	}
 
 	//Прогрузка общенй информации
@@ -287,6 +307,7 @@ func StartReport() {
 }
 
 func ReportProblemPDF() {
+	ProcessDebug("Start generate pdf - Problem ")
 	for _, i := range Problems {
 		if i.Type == "Grafana" || i.Type == "" {
 			pdf.SetFont("Times", "", 10)
@@ -297,22 +318,23 @@ func ReportProblemPDF() {
 }
 
 func ReportProblemScenPDF() {
+	ProcessDebug("Start generate pdf - Problem scenario")
 	pdf.AddPage()
-
-	pdf.SetY(pdf.GetY() + 10)
+	pdf.SetY(pdf.GetY() + 6)
 	pdf.SetFont("Times", "B", 16)
 	pdf.CellFormat(195, 7, "Report problem Jmeter", "0", 0, "CM", false, 0, "")
-	pdf.SetY(pdf.GetY() + 7)
+	pdf.SetY(pdf.GetY() + 6)
 
 	for _, i := range Problems {
 		if i.Type == "Jmeter" {
-			pdf.SetFont("Times", "", 10)
-			pdf.SetY(pdf.GetY() + 7)
-			pdf.CellFormat(65, 7, i.Description, "", 0, "LM", false, 0, "")
+			pdf.SetFont("Times", "", 6)
+			pdf.SetY(pdf.GetY() + 3)
+			pdf.CellFormat(65, 3, i.Description, "", 0, "LM", false, 0, "")
 		}
 	}
 }
 func ReportInfluxPDF() {
+	ProcessDebug("Start generate pdf - Influx JMeter")
 	pdf.AddPage()
 
 	pdf.SetY(pdf.GetY() + 10)
@@ -343,7 +365,7 @@ func ReportInfluxPDF() {
 }
 
 func ReportInfluxScrnPDF() {
-
+	ProcessDebug("Start generate pdf - Influx Scenario Jmeter")
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 10)
 	pdf.SetFont("Times", "B", 16)
@@ -361,9 +383,10 @@ func ReportInfluxScrnPDF() {
 		pdf.CellFormat(195, 7, k, "0", 0, "CM", false, 0, "")
 
 		for _, i := range LTScen_dimanict[k] {
-			pdf.SetY(pdf.GetY() + 6)
-			pdf.SetFont("Times", "B", 8)
+			//pdf.SetY(pdf.GetY() + 6)
+			pdf.SetFont("Times", "B", 6)
 			pdf.CellFormat(195, 7, i.NameTest+":"+i.NameThread, "0", 0, "CM", false, 0, "")
+			pdf.SetY(pdf.GetY() + 6)
 
 			scenariopdf := make(map[string][]reportdata.YField)
 			//Для красивого вывода в отчет
@@ -373,9 +396,7 @@ func ReportInfluxScrnPDF() {
 
 			if _, ok := scenariopdf["all"]; ok {
 				pdf.SetFont("Times", "", 4)
-				pdf.SetY(pdf.GetY() + 4)
-				pdf.CellFormat(40, 4, "All ", "0", 0, "LM", false, 0, "")
-				pdf.SetY(pdf.GetY() + 4)
+				pdf.CellFormat(20, 4, "All ", "0", 0, "LM", false, 0, "")
 
 				num := 1
 				for _, ipdf := range scenariopdf["all"] {
@@ -389,9 +410,7 @@ func ReportInfluxScrnPDF() {
 
 			if _, ok := scenariopdf["ok"]; ok {
 
-				pdf.SetY(pdf.GetY() + 4)
-				pdf.CellFormat(40, 4, "Status OK", "0", 0, "LM", false, 0, "")
-				pdf.SetY(pdf.GetY() + 4)
+				pdf.CellFormat(20, 4, "Status OK", "0", 0, "LM", false, 0, "")
 
 				num := 1
 				for _, ipdf := range scenariopdf["ok"] {
@@ -405,9 +424,7 @@ func ReportInfluxScrnPDF() {
 
 			if _, ok := scenariopdf["ko"]; ok {
 
-				pdf.SetY(pdf.GetY() + 4)
-				pdf.CellFormat(40, 4, "Error ", "0", 0, "LM", false, 0, "")
-				pdf.SetY(pdf.GetY() + 4)
+				pdf.CellFormat(20, 4, "Error ", "0", 0, "LM", false, 0, "")
 
 				num := 1
 				for _, ipdf := range scenariopdf["ko"] {
@@ -425,6 +442,7 @@ func ReportInfluxScrnPDF() {
 }
 
 func GrafanaReportPDF() {
+	ProcessDebug("Start generate pdf - Grafana")
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 6)
 
@@ -445,7 +463,7 @@ func GrafanaReportPDF() {
 			saveY = saveY + tmpheight + ln + 2
 		}
 
-		if pdf.GetY()+ln+float64(i.Size.Height)+7 > a4height || saveY > 297 {
+		if pdf.GetY()+ln+float64(i.Size.Height)+7 > a4height || saveY > a4height {
 			pdf.AddPage()
 			saveY = 6
 		}
@@ -482,6 +500,77 @@ func GrafanaReportPDF() {
 			}
 		}
 
+	}
+}
+
+func ClickHouseReportPDF() {
+	ProcessDebug("Start generate pdf - ClickHouse")
+	var saveX, saveY, tmpheight float64
+	saveX = 6
+	tmpheight = 0
+	saveY = 10
+
+	pdf.AddPage()
+	pdf.SetY(pdf.GetY() + 6)
+	pdf.SetFont("Times", "B", 16)
+	pdf.CellFormat(195, 7, "Report ClickHouse", "0", 0, "CM", false, 0, "")
+	saveX, saveY = pdf.GetXY()
+
+	//добавить вычисление длины для таблиц
+
+	for _, i := range LTClickHouse {
+
+		ln := pdf.PointConvert(6)
+
+		if pdf.GetY()+float64(25)+ln > a4height || saveY+25+ln > a4height {
+			pdf.AddPage()
+			saveY = 10
+			saveX = 6
+		}
+
+		pdf.SetXY(saveX, saveY)
+		pdf.SetY(pdf.GetY() + 8)
+		pdf.SetFont("Times", "B", 10)
+		pdf.CellFormat(195, 7, i.Name, "0", 0, "CM", false, 0, "")
+
+		pdf.SetY(pdf.GetY() + 8)
+		saveX, saveY = pdf.GetXY()
+
+		// При создании новой таблицы проверяем, что она влазит на страницу
+		// Добавить перенос строк
+		// разобраться с отступом
+		saveX = 6
+
+		for _, j := range i.Meta {
+			pdf.SetFont("Times", "B", 5)
+			pdf.Rect(saveX, saveY, float64(j.Len+4), 5+tmpheight, "")
+			pdf.MultiCell(float64(j.Len+4), 5+tmpheight, j.Name, "", "CM", false)
+			saveX += float64(j.Len + 4)
+			pdf.SetXY(saveX, saveY)
+		}
+
+		for _, jj := range i.Data {
+			saveX = 6
+			saveY += 5
+
+			if pdf.GetY()+float64(25)+ln > a4height || saveY+25+ln > a4height {
+				pdf.AddPage()
+				saveX = 6
+				saveY = 10
+			}
+
+			pdf.SetXY(saveX, saveY)
+			pdf.SetFont("Times", "", 5)
+
+			for _, jjj := range i.Meta {
+				pdf.Rect(saveX, saveY, float64(jjj.Len+4), 5+tmpheight, "")
+				pdf.MultiCell(float64(jjj.Len+4), 5+tmpheight, jj[jjj.Name].(string), "", "", false)
+				saveX += float64(jjj.Len + 4)
+				pdf.SetXY(saveX, saveY)
+			}
+
+		}
+		saveX, saveY = pdf.GetXY()
 	}
 }
 
@@ -558,12 +647,8 @@ func InfluxErrorJmeter() {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range " + request)
-	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
-	}
 
-	if resp.StatusCode == 200 {
+		log.Println("HTTP Status is in the 2xx range " + request)
 
 		infjson, err := reportdata.JsonINfluxParse(resp)
 
@@ -601,113 +686,9 @@ func InfluxErrorJmeter() {
 		}
 	} else {
 		resp.Body.Close()
+		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 		ProcessDebug(fmt.Errorf("Response Status: %s", resp.Status))
 	}
-}
-
-//Устарело смотри InfluxJmeterScenario()
-//Работа с динамикой в InfluxJmeterScenario()
-func InfluxJmeterScenarioOld() {
-
-	request := cfg.JmeterInflux + url.QueryEscape(cfg.JmeterQueryScenario+timeperiod+cfg.JmeterQueryScnrGroup)
-
-	ProcessDebug("JmeterScenario")
-	ProcessDebug(request)
-
-	resp, err := http.Get(request)
-	if err != nil {
-		log.Println(err)
-	}
-
-	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range " + request)
-	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
-	}
-
-	infjson, _ := reportdata.JsonINfluxParse(resp)
-
-	resp.Body.Close()
-
-	for _, i := range infjson.Results[0].Series {
-
-		var percen float64
-		var maxl float64
-
-		percen = reportdata.JsonINfluxFiledParseFloat(i.Values[0][1])
-		maxl = reportdata.JsonINfluxFiledParseFloat(i.Values[0][2])
-
-		ProcessDebug("Scenario " + i.Tags.Transaction)
-		ProcessDebug("percentile is " + strconv.Itoa(int(percen)) + " ms")
-		ProcessDebug("max latency " + strconv.Itoa(int(maxl)) + " ms")
-
-		request_child := cfg.JmeterInflux + url.QueryEscape(`SELECT mean("count") / 5 FROM "details" WHERE "transaction" ='`+i.Tags.Transaction+`' AND "statut" = 'ok' AND time >= now() - 1d GROUP BY time(1d), "transaction" fill(null) ORDER BY time DESC`)
-
-		ProcessDebug("Load average request rate")
-		ProcessDebug(request_child)
-
-		resp, err := http.Get(request_child)
-		if err != nil {
-			log.Println(err)
-		}
-
-		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range " + request)
-		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
-		}
-
-		var avgcount float64
-
-		if resp.StatusCode == 200 {
-			infjson_child, err := reportdata.JsonINfluxParse(resp)
-
-			if err == nil {
-
-				avgcount = reportdata.JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
-
-			}
-		}
-
-		resp.Body.Close()
-
-		request_child = cfg.JmeterInflux + url.QueryEscape(`SELECT mean("count") / 5 FROM "details" WHERE "transaction" ='`+i.Tags.Transaction+`' AND "statut" = 'ko' AND time >= now() - 1d GROUP BY time(1d), "transaction" fill(null) ORDER BY time DESC`)
-		ProcessDebug("Load average request rate")
-		ProcessDebug(request_child)
-
-		resp, err = http.Get(request_child)
-		if err != nil {
-			log.Println(err)
-		}
-
-		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-			log.Println("HTTP Status is in the 2xx range " + request)
-		} else {
-			log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
-		}
-
-		var avgcountr float64
-
-		if resp.StatusCode == 200 {
-			infjson_child, err := reportdata.JsonINfluxParse(resp)
-
-			if err == nil {
-
-				avgcountr = reportdata.JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
-
-			}
-		}
-		resp.Body.Close()
-
-		p := reportdata.Scenario{Tags: i.Tags.Transaction,
-			Percentile: percen,
-			Maxlatency: maxl,
-			Rate:       avgcount,
-			RateError:  avgcountr}
-		LTScenario = append(LTScenario, p)
-
-	}
-
 }
 
 func InfluxJmeterScenario() {
@@ -723,12 +704,9 @@ func InfluxJmeterScenario() {
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
-		log.Println("HTTP Status is in the 2xx range " + request)
-	} else {
-		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
-	}
 
-	if resp.StatusCode == 200 {
+		log.Println("HTTP Status is in the 2xx range " + request)
+
 		infjson, _ := reportdata.JsonINfluxParse(resp)
 
 		resp.Body.Close()
@@ -834,11 +812,14 @@ func InfluxJmeterScenario() {
 		}
 	} else {
 		resp.Body.Close()
+		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
 		ProcessDebug(fmt.Errorf("Response Status: %s", resp.Status))
 	}
 }
 
 func GrafanaReport() {
+
+	ProcessDebug("Load grafana metrics")
 
 	var p reportdata.LTGrag
 	for _, i := range cfg.Grafanadash {
@@ -877,14 +858,10 @@ func GrafanaReport() {
 			log.Println(err)
 		}
 
-		if rsp.StatusCode >= 200 && rsp.StatusCode <= 299 {
-			log.Println("Request success")
-		} else {
-			log.Println("Request error " + strconv.Itoa(rsp.StatusCode) + " " + request)
-		}
-
 		// проверяем получение картинки, статус 200
-		if rsp.StatusCode == 200 {
+		if rsp.StatusCode >= 200 && rsp.StatusCode <= 299 {
+
+			log.Println("Request success")
 
 			var n io.Reader
 			//io.Copy(ioutil.Discard, rsp.Body)
@@ -918,7 +895,7 @@ func GrafanaReport() {
 				// получение данные из инфлюкса
 				request_inf = i.UrlQuery + url.QueryEscape(i.Query+" AND "+timeperiod+i.UrlQueryGroup)
 			}
-			ProcessDebug("Request " + request_inf)
+			ProcessDebug("Request image " + request_inf)
 
 			resp_inf, err := http.NewRequest("GET", request_inf, nil)
 			resp_inf.Header.Add("Authorization", i.AuthHeader)
@@ -934,14 +911,11 @@ func GrafanaReport() {
 				log.Println(err)
 			}
 
-			if rsp_inf.StatusCode >= 200 && rsp_inf.StatusCode <= 299 {
-				log.Println("Request success")
-			} else {
-				log.Println("Request Status error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request_inf)
-			}
-
 			var percentile float64
-			if rsp_inf.StatusCode == 200 {
+			if rsp_inf.StatusCode >= 200 && rsp_inf.StatusCode <= 299 {
+
+				log.Println("Request Grafana threshold success")
+
 				if i.SourceType == 2 {
 					var prom reportdata.PrometheusResponse
 					err = prom.JsonPrometheusParse(rsp_inf)
@@ -956,25 +930,73 @@ func GrafanaReport() {
 						percentile = reportdata.JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
 					}
 				}
+
+				if percentile > float64(i.Threshold) {
+					p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
+					Problems = append(Problems, p)
+				}
+
+				p.Name = i.Name
+				p.Threshold = i.Threshold
+				p.ContentType = rsp.Header["Content-Type"][0]
+				p.Size.Height = i.Size.Height
+				p.Size.Width = i.Size.Width
+				p.UrlDash = i.Urldash + timewrap
+				LTGrafs = append(LTGrafs, p)
+
+			} else {
+				log.Println("Request Grafana threshold  error " + strconv.Itoa(rsp_inf.StatusCode) + " " + request_inf)
 			}
-
-			if percentile > float64(i.Threshold) {
-				p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
-				Problems = append(Problems, p)
-			}
-
-			p.Name = i.Name
-			p.Threshold = i.Threshold
-			p.ContentType = rsp.Header["Content-Type"][0]
-			p.Size.Height = i.Size.Height
-			p.Size.Width = i.Size.Width
-			p.UrlDash = i.Urldash + timewrap
-			LTGrafs = append(LTGrafs, p)
-
 		} else {
 			rsp.Body.Close()
 			ProcessDebug(fmt.Errorf("Response Status: %s", rsp.Status))
+			log.Println("Request error " + strconv.Itoa(rsp.StatusCode) + " " + request)
 		}
+	}
+
+}
+
+func ClickHouseReport() {
+	ProcessDebug("Start load ClickHouse")
+
+	//rezlen := len(cfg.ClickHouse.Query)
+
+	for _, i := range cfg.ClickHouse.Query {
+		request := "http://" + cfg.ClickHouse.Server + "/?"
+
+		resp, err := http.NewRequest("GET", request, nil)
+		if err != nil {
+			log.Println(err)
+		}
+		ProcessDebug(strings.Replace(i.Sql, "{timestamp}", timeperiod_clickhouse, 1) + " FORMAT JSONStrings")
+
+		resp.SetBasicAuth(cfg.ClickHouse.User, cfg.ClickHouse.Pass)
+		resp.Header.Add("Content-Type", "application/json")
+		resp.Header.Add("X-ClickHouse-Progress", "1")
+		resp.Header.Add("X-ClickHouse-Database", i.DBname)
+		resp.Header.Add("User-Agent", "go-LT-Report")
+		resp.Body = ioutil.NopCloser(strings.NewReader(strings.Replace(i.Sql, "{timestamp}", timeperiod_clickhouse, 1) + " FORMAT JSONStrings"))
+
+		cli := &http.Client{}
+		rsp, err := cli.Do(resp)
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		if rsp.StatusCode >= 200 && rsp.StatusCode <= 299 {
+			log.Println("Query ClickHouse succes ")
+
+			var clkhouse reportdata.ClickHouseJson
+			err = clkhouse.JsonClickHouseParse(rsp, i.Name)
+			LTClickHouse = append(LTClickHouse, clkhouse)
+
+		} else {
+			log.Println("Query ClickHouse error " + strconv.Itoa(rsp.StatusCode) + " " + request)
+		}
+
+		defer cli.CloseIdleConnections()
+
 	}
 
 }

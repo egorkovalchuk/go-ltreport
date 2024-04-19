@@ -23,7 +23,28 @@ type Config struct {
 	ReportConfluencePass  string `json:"ReportConfluencePass"`
 	ReportConfluenceToken string `json:"ReportConfluenceToken"`
 	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
-	ReportOn              struct {
+	ReportIM              struct {
+		User       string `json:"User"`
+		Pass       string `json:"Pass"`
+		Token      string `json:"Token"`
+		Type       int    `json:"Type"`
+		LoginFSM   string `json:"LoginFSM"`
+		PassFSM    string `json:"PassFSM"`
+		Fsmconnect string `json:"FSMConnect"`
+		Fsmtu      string `json:"FSMTU"`
+	} `json:"ReportIM"`
+	ClickHouse struct {
+		Server string `json:"Server"`
+		User   string `json:"User"`
+		Pass   string `json:"Pass"`
+		Token  string `json:"Token"`
+		Query  []struct {
+			Sql    string `json:"sql"`
+			DBname string `json:"dbname"`
+			Name   string `json:"name"`
+		} `json:"Query"`
+	} `json:"ClickHouse"`
+	ReportOn struct {
 		//Включить отчет из Jmeter
 		ReportJmeter bool `json:"ReportJmeter"`
 		//Включить отчет из FSM
@@ -77,10 +98,6 @@ type Config struct {
 		//Описание порога
 		Description string `json:"Description"`
 	} `json:"JmeterQueryScnrThreshold"`
-	LoginFSM    string `json:"LoginFSM"`
-	PassFSM     string `json:"PassFSM"`
-	Fsmconnect  string `json:"FSMConnect"`
-	Fsmtu       string `json:"FSMTU"`
 	Grafanadash []struct {
 		Name string `json:"Name"`
 		// авторизация на графане
@@ -298,12 +315,20 @@ func (p *ScenarioDinamic) SeField(YF []YField) {
 }
 
 func Helpstart() {
-	fmt.Println("Use -v gor get version")
+	fmt.Println("Use -v get version")
 	fmt.Println("Use -d start with debug mode")
 	fmt.Println("Use -c start with users config")
 	fmt.Println("Use -hour to generate an hourly report ")
 	fmt.Println("Use -fsmlogin start with Login FSM")
 	fmt.Println("Use -fsmpass start with Password FSM")
-	fmt.Println("Use -conflproxy start with proxy for connection to Confluence")
+	fmt.Println("Use -conflproxy start with proxy for connection to Confluence, example http://user:password@url:port")
 	fmt.Println("Use -start and -end for generate a report on an arbitrary date ")
+}
+
+func max(x int, y int) int {
+	if x > y {
+		return x
+	} else {
+		return y
+	}
 }

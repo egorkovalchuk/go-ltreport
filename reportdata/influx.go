@@ -62,6 +62,7 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 
 	if err != nil {
 		log.Println(err)
+		return infjson, err
 	}
 
 	if len(infjson.Results) == 0 {

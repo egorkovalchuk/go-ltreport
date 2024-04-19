@@ -12,6 +12,31 @@
 	//авторизация по токену
 	"ReportConfluenceToken":"token",
 	"ReportConfluenceProxy":"",
+	//Настройки для FSM
+	ReportIM" :{
+		"User" : "",
+		"Pass": "",
+		"Token" : "",
+		"Type": 1,    "LoginFSM" :     "string",
+		"PassFSM" :   	 "string",
+		"FSMConnect": 	 "fsm.ru",
+		"FSMTU":      	 "string"
+	},
+	//Настройки для ClickHouse
+	"ClickHouse" : {
+		"Server" : "localhost:1234"
+		"User" : "stress_test",
+		"Pass" : "",
+		"Token" : ""
+		"Query" : [
+			{ "sql" : "",
+			  "dbname" : "",
+			  "name": "" },
+			{ "sql" : "",
+			  "dbname" : "",
+			  "name": "" }
+		]
+	},
 	"ReportOn": { 
 			//Включить отчет из Jmeter
 			"ReportJmeter": true,
@@ -64,10 +89,6 @@
 			{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Percentile90", "Threshold": 20, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"},
 			{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Rate", "Threshold": 10, "Statut":"ko", "Description": "The rate count is higher %d ops in scenario %s current %d ops"}
 		],
-    "LoginFSM" :     "string",
-	"PassFSM" :   	 "string",
-    "FSMConnect": 	 "fsm.ru",
-	"FSMTU":      	 "string",
 	"GrafanaDash":
 		[
 			{"Name":     "ESB CPU",

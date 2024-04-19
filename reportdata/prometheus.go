@@ -31,6 +31,7 @@ func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 
 	if p.Status != "success" {
