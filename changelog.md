@@ -6,3 +6,5 @@ Add token for confluence
 Add ClickHouse
 # 0.3.0.1 
 Add PDF report CH
+# 0.3.0.2 
+Add Remove png-files

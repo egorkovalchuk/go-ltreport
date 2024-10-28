@@ -43,8 +43,13 @@ var (
 	LoginFSM string
 	PassFSM  string
 	//Proxy
-	//Confluence proxy
+	//Confluence
 	ConflProxy string
+	ConfToken  string
+
+	//ClickHouse
+	CHUser string
+	CHPass string
 
 	//режим работы сервиса(дебаг мод)
 	debugm bool
@@ -122,6 +127,15 @@ func redefinitionconf() {
 		cfg.ReportConfluenceProxy = ConflProxy
 	}
 
+	if ConfToken != "" {
+		cfg.ReportConfluenceToken = ConfToken
+	}
+
+	if CHUser != "" && CHPass != "" {
+		cfg.ClickHouse.User = CHUser
+		cfg.ClickHouse.Pass = CHPass
+	}
+
 }
 
 //Запись ошибки с прекращением выполнения
@@ -182,6 +196,9 @@ func main() {
 	flag.StringVar(&LoginFSM, "fsmlogin", "", "HP Service Manager Login")
 	flag.StringVar(&PassFSM, "fsmpass", "", "HP Service Manager Password")
 	flag.StringVar(&ConflProxy, "conflproxy", "", "Confluence proxy, use http://user:password@url:port ")
+	flag.StringVar(&ConfToken, "ConfToken", "", "Confluence Token ")
+	flag.StringVar(&CHUser, "CH User", "", "ClichHouse User")
+	flag.StringVar(&CHPass, "CH Password", "", "ClichHouse password")
 	flag.BoolVar(&help, "h", false, "Use -h for help")
 	flag.BoolVar(&hour, "hour", false, "Generate by hourly report")
 	flag.BoolVar(&rmtmpfile, "rm", false, "Remove temp files")
@@ -212,6 +229,7 @@ func main() {
 
 	ProcessDebug("Start with debug mode")
 	StartReport()
+	RemoveTemp()
 
 }
 
@@ -1033,14 +1051,14 @@ func ReportDownload(reportfilename string) {
 	}
 	//Получение описание базовой страницы
 	ProcessDebug("GetContent")
-	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Expand: []string{"children.page"}})
+	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Expand: []string{"children.page"}})
 	if err != nil {
 		log.Println(err)
 		log.Println(JsonCont)
 		return
 	}
 	ProcessDebug("GetContentChildPage")
-	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: "tar", Limit: 250, Expand: []string{"children.page"}})
+	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Limit: 250, Expand: []string{"children.page"}})
 	if err != nil {
 		log.Println(err)
 		log.Println(JsonConC)
@@ -1161,4 +1179,19 @@ func ReportDownload(reportfilename string) {
 
 	}
 
+}
+
+func RemoveTemp() {
+
+	directory, _ := os.Getwd()
+	readDirectory, _ := os.Open(directory)
+	allFiles, _ := readDirectory.Readdir(0)
+
+	for f := range allFiles {
+		file := allFiles[f]
+		fileName := file.Name()
+		if strings.HasSuffix(fileName, ".png") {
+			os.Remove(fileName)
+		}
+	}
 }

@@ -4,6 +4,8 @@
 *.png
 *.rar
 *.zip
+*.json
 .vscode/launch.json
+config.json
 config.json
 task

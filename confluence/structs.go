@@ -53,7 +53,7 @@ type ConflType struct {
 	} `json:"body"`
 	Metadata   *Metadata `json:"metadata"`
 	Extensions struct {
-		Position string `json:"position"`
+		Position interface{} `json:"position"`
 	} `json:"extensions"`
 	Links      *Links      `json:"_links,omitempty"`
 	Expandable *Expandable `json:"_expandable"`
@@ -178,7 +178,7 @@ type Children struct {
 			Status     string `json:"status"`
 			Title      string `json:"title"`
 			Extensions struct {
-				Position string `json:"position"`
+				Position interface{} `json:"position"`
 			} `json:"extensions"`
 			Links      *Links `json:"_links"`
 			Expandable struct {

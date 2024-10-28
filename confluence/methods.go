@@ -149,6 +149,9 @@ func (confl *API) GetJson(content []byte) (*ConflType, error) {
 	var JsonContent ConflType
 	err := json.Unmarshal(content, &JsonContent)
 	if err != nil {
+		if DebugFlag {
+			log.Println(string(content))
+		}
 		return nil, err
 	}
 	return &JsonContent, nil
