@@ -1,20 +1,62 @@
-# go-ltreport
+# Load Test Report
+Utility for Generating Load Testing Reports
 
-Create stress test report for Jmeter
+## Project Description
+LT report is a tool designed to automate the analysis and generation of reports based on load testing results. This project is aimed at developers, QA engineers, and DevOps specialists who need to quickly convert raw metrics into structured reports in a convenient format.
 
-Utill use InFlux and upload PDF report to confluence
+A utility for automating the generation of comprehensive reports based on load testing results, with integration into:
+* InfluxDB/JMeter
+* Grafana
+* ClickHouse
+* Prometheus
+* Confluence
+* HP Service Manager
 
-Use -v gor get version
+## Key Features
+* Automatic collection of metrics from various sources
+* Analysis of threshold value exceedances
+* Generation of PDF reports with charts and tables
+* Uploading reports to Confluence
+* Support for custom time periods
 
-Use -d start with debug mode
+## Usage
+* Use -v gor get version
+* Use -d start with debug mode
+* Use -c start with users config
+* Use -hour to generate an hourly report
+* Use -fsmlogin start with Login FSM(not suppoted)
+* Use -fsmpass start with Password FSM(not suppoted)
+* Use -conflproxy start with proxy for connection to Confluence
+* Use -start start custom date (format: 2006.01.02 15:04 )
+* Use -end end custom date (format: 2006.01.02 15:04 )
+* Use -ConfToken Token for Confluence access
+* Use -CHUser ClickHouse username
+* Use -CHPass ClickHouse password
 
-Use -c start with users config
+## Report Generation
+### Structure of the PDF Report
+* Title Page with Date
+* Summary of Incidents
+* Grafana Charts
+* Data from ClickHouse
+* Detailed Test Statistics
+* Analysis of Load Testing Scenarios
 
-Use -hour to generate an hourly report
+## Integration with Confluence
+To upload reports, you need to:
+* Specify credentials in the configuration file.
+* Set the ID of the target page.
+* Ensure write permissions are granted.
+Reports are automatically created as child pages in Confluence with attached PDF files.
 
-Use -fsmlogin start with Login FSM
+## Example 
+``` bash
+# Стандартный отчет за день
+./ltreport -c config.json
 
-Use -fsmpass start with Password FSM
+# Отчет за произвольный период
+./ltreport -start "2023.12.31 09:00" -end "2023.12.31 18:00"
 
-Use -conflproxy start with proxy for connection to Confluence
-
+# Режим отладки
+./ltreport -d -c custom_config.json
+```

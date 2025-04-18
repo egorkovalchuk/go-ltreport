@@ -92,27 +92,58 @@
 	"GrafanaDash":
 		[
 			{"Name":     "ESB CPU",
-            //ссылка на даш
+            // ссылка на даш
 			 "UrlDash":  "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
              // авторизация на графане
 			 "AuthHeader":"Bearer Hash=",
-			 //ссылка на панель
+			 // ссылка на панель
              "UrlPanel": "",
-             //Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+             // Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
 			 "UrlImg":   "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
-			 //запрос данных для даша
+			 // запрос данных для даша
              "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /sib-oapi-krf[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
-			 //SourceType: 1 телеграф, 2 прометеус 
-			 //ссылка на запрос данных, смотреть в графане
+			 // SourceType: 1 телеграф, 2 прометеус 
+			 // ссылка на запрос данных, смотреть в графане
              "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
-			 //группировка
+			 // группировка
              "UrlQueryGroup":"GROUP BY time(1d) fill(none)",
-             //Порог для запроса
+             // Порог для запроса
              "Threshold": 90,
-             //Описание порога
+             // Описание порога
 			 "ThDescription": "CPU jopa",
-             //размер картинки в pdf
+             // размер картинки в pdf
              "Size": {"Width": 120, "Height": 50}
+			}
+		],
+		"GrafanadashTemplate":
+		[
+			{"Name":     "ESB CPU",
+            // ссылка на даш
+			 "UrlDash":  "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
+             // авторизация на графане
+			 "AuthHeader":"Bearer Hash=",
+			 // ссылка на панель
+             "UrlPanel": "",
+             // Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+			 "UrlImg":   "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
+			 // запрос данных для даша
+             "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /sib-oapi-krf[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
+			 // SourceType: 1 телеграф, 2 прометеус, graphite-api
+			 // ссылка на запрос данных, смотреть в графане
+             "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
+			 // группировка
+             "UrlQueryGroup":"GROUP BY time(1d) fill(none)",
+             // Порог для запроса
+             "Threshold": 90,
+             // Описание порога
+			 "ThDescription": "CPU jopa",
+             // размер картинки в pdf
+             "Size": {"Width": 120, "Height": 50},
+			 // Добавлять график только при срабатывании порога
+			 "ThresholdFilter": true,
+			 // Имя Файла и шаблон
+			 "FileList": "1.csv",
+			 "FilePettern": "server;name"
 			}
 		]
 }

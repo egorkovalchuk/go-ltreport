@@ -14,7 +14,7 @@ import (
 
 //Copy Virtomize/confluence-go-api
 //Выполнение самого запроса
-func (confl *API) Request(req *http.Request) ([]byte, error) {
+func (confl *API) Request(req *http.Request, f func(level string, logtext interface{})) ([]byte, error) {
 	req.Header.Add("Accept", "application/json, */*")
 
 	// only auth if we can auth
@@ -24,13 +24,13 @@ func (confl *API) Request(req *http.Request) ([]byte, error) {
 
 	resp, err := confl.client.Do(req)
 	if err != nil {
-		processlog(req)
+		f("ERROR: HTTP:", req)
 		return nil, err
 	}
 
 	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		processlog(string(res))
+		f("ERROR: HTTP:", string(res))
 		return nil, err
 	}
 
@@ -55,7 +55,7 @@ func (confl *API) Request(req *http.Request) ([]byte, error) {
 }
 
 // SendContentAttachmentRequest sends a multipart/form-data attachment create/update request to a content
-func (confl *API) SendContentAttachmentRequest(ep *url.URL, attachmentName string, attachment io.Reader, params map[string]string) ([]byte, error) {
+func (confl *API) SendContentAttachmentRequest(ep *url.URL, attachmentName string, attachment io.Reader, params map[string]string, f func(level string, logtext interface{})) ([]byte, error) {
 	// setup body for mulitpart file, adding minorEdit option
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -91,7 +91,7 @@ func (confl *API) SendContentAttachmentRequest(ep *url.URL, attachmentName strin
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	// https://developer.atlassian.com/cloud/confluence/rest/#api-api-content-id-child-attachment-put
 
-	res, err := confl.Request(req)
+	res, err := confl.Request(req, f)
 	if err != nil {
 		return nil, err
 	}

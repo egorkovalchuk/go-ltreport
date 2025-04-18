@@ -4,9 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,26 +14,6 @@ import (
 // режим Дебага
 var DebugFlag = false
 var LogFlag = false
-
-//Запись в лог при включенном дебаге
-func processdebug(logtext interface{}) {
-	if DebugFlag {
-		if LogFlag {
-			log.Println(logtext)
-		} else {
-			fmt.Println(logtext)
-		}
-	}
-}
-
-//Вывод в лог
-func processlog(logtext interface{}) {
-	if LogFlag {
-		log.Println(logtext)
-	} else {
-		fmt.Println(logtext)
-	}
-}
 
 // Установить переменную дебага
 func SetDebug(state bool) {
@@ -78,14 +56,14 @@ func NewAPI(location string, username string, password string, token string, pro
 	return a, nil
 }
 
-func (confl *API) GetContent(id string, param ContentQuery) (*ConflType, error) {
+func (confl *API) GetContent(id string, param ContentQuery, f func(level string, logtext interface{})) (*ConflType, error) {
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id)
 
 	if err != nil {
 		return nil, errors.New("Url generation error")
 	}
 
-	log.Println("Load " + ep.String())
+	f("INFO: CONFL", "Load "+ep.String())
 	ep.RawQuery = addContentQueryParams(param).Encode()
 
 	req, err := http.NewRequest("GET", ep.String(), nil)
@@ -95,14 +73,14 @@ func (confl *API) GetContent(id string, param ContentQuery) (*ConflType, error) 
 
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := confl.Request(req)
+	res, err := confl.Request(req, f)
 	if err != nil {
 		return nil, err
 	}
 
-	JsonCont, err := confl.GetJson(res)
+	JsonCont, err := confl.GetJson(res, f)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 
@@ -112,14 +90,14 @@ func (confl *API) GetContent(id string, param ContentQuery) (*ConflType, error) 
 
 }
 
-func (confl *API) GetContentChildPage(id string, param ContentQuery) (*ConflTypeA, error) {
+func (confl *API) GetContentChildPage(id string, param ContentQuery, f func(level string, logtext interface{})) (*ConflTypeA, error) {
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/page")
 
 	if err != nil {
 		return nil, errors.New("Url generation error")
 	}
 
-	log.Println("Load " + ep.String())
+	f("INFO: CONFL", "Load "+ep.String())
 	ep.RawQuery = addContentQueryParams(param).Encode()
 
 	req, err := http.NewRequest("GET", ep.String(), nil)
@@ -129,14 +107,14 @@ func (confl *API) GetContentChildPage(id string, param ContentQuery) (*ConflType
 
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := confl.Request(req)
+	res, err := confl.Request(req, f)
 	if err != nil {
 		return nil, err
 	}
 
 	JsonCont, err := confl.GetJsonA(res)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 
@@ -144,13 +122,13 @@ func (confl *API) GetContentChildPage(id string, param ContentQuery) (*ConflType
 
 }
 
-func (confl *API) GetJson(content []byte) (*ConflType, error) {
+func (confl *API) GetJson(content []byte, f func(level string, logtext interface{})) (*ConflType, error) {
 
 	var JsonContent ConflType
 	err := json.Unmarshal(content, &JsonContent)
 	if err != nil {
 		if DebugFlag {
-			log.Println(string(content))
+			f("DEBUG: CONFL", string(content))
 		}
 		return nil, err
 	}
@@ -159,7 +137,7 @@ func (confl *API) GetJson(content []byte) (*ConflType, error) {
 }
 
 //Создание новой страницы
-func (confl *API) CreateContent(data *ConflCreateType) (*ConflType, error) {
+func (confl *API) CreateContent(data *ConflCreateType, f func(level string, logtext interface{})) (*ConflType, error) {
 
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/")
 
@@ -167,7 +145,7 @@ func (confl *API) CreateContent(data *ConflCreateType) (*ConflType, error) {
 		return nil, errors.New("Url generation error")
 	}
 
-	log.Println("Load " + ep.String())
+	f("INFO: CONFL", "Load "+ep.String())
 
 	var body io.Reader
 	if data != nil {
@@ -185,14 +163,14 @@ func (confl *API) CreateContent(data *ConflCreateType) (*ConflType, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := confl.Request(req)
+	res, err := confl.Request(req, f)
 	if err != nil {
 		return nil, err
 	}
 
-	JsonConC, err := confl.GetJson(res)
+	JsonConC, err := confl.GetJson(res, f)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 
@@ -202,14 +180,14 @@ func (confl *API) CreateContent(data *ConflCreateType) (*ConflType, error) {
 
 }
 
-func (confl *API) UploadAttachment(id string, attachmentName string, attachment io.Reader) (*ConflTypeA, error) {
+func (confl *API) UploadAttachment(id string, attachmentName string, attachment io.Reader, f func(level string, logtext interface{})) (*ConflTypeA, error) {
 
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/attachment")
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := confl.SendContentAttachmentRequest(ep, attachmentName, attachment, map[string]string{})
+	res, err := confl.SendContentAttachmentRequest(ep, attachmentName, attachment, map[string]string{}, f)
 
 	if err != nil {
 		return nil, err
@@ -217,7 +195,7 @@ func (confl *API) UploadAttachment(id string, attachmentName string, attachment 
 
 	JsonCon, err := confl.GetJsonA(res)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 
@@ -225,21 +203,21 @@ func (confl *API) UploadAttachment(id string, attachmentName string, attachment 
 
 }
 
-func (confl *API) UpdateAttachment(id string, attachmentName string, attachid string, attachment io.Reader) (*ConflTypeA, error) {
+func (confl *API) UpdateAttachment(id string, attachmentName string, attachid string, attachment io.Reader, f func(level string, logtext interface{})) (*ConflTypeA, error) {
 
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/attachment/" + attachid + "/data")
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := confl.SendContentAttachmentRequest(ep, attachmentName, attachment, map[string]string{})
+	res, err := confl.SendContentAttachmentRequest(ep, attachmentName, attachment, map[string]string{}, f)
 	if err != nil {
 		return nil, err
 	}
 
 	JsonCon, err := confl.GetJsonA(res)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 
@@ -247,14 +225,14 @@ func (confl *API) UpdateAttachment(id string, attachmentName string, attachid st
 
 }
 
-func (confl *API) GetAttachments(id string) (*ConflTypeA, error) {
+func (confl *API) GetAttachments(id string, f func(level string, logtext interface{})) (*ConflTypeA, error) {
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/attachment")
 
 	if err != nil {
 		return nil, errors.New("Url generation error")
 	}
 
-	log.Println("Load " + ep.String())
+	f("INFO: CONFL", "Load "+ep.String())
 
 	req, err := http.NewRequest("GET", ep.String(), nil)
 	if err != nil {
@@ -263,14 +241,14 @@ func (confl *API) GetAttachments(id string) (*ConflTypeA, error) {
 
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := confl.Request(req)
+	res, err := confl.Request(req, f)
 	if err != nil {
 		return nil, err
 	}
 
 	JsonCon, err := confl.GetJsonA(res)
 	if err != nil {
-		log.Println(err)
+		f("ERROR: CONFL", err)
 		return nil, err
 	}
 

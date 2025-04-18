@@ -4,24 +4,166 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
+	"strconv"
+	"time"
 )
 
-// режим Дебага
-var DebugFlag = false
-var LogFlag = false
+var (
+	// режим Дебага
+	DebugFlag = false
+	LogFlag   = false
+	err       error
+)
 
-var err error
+//структура influx type 1
+type Mean struct {
+	Results []struct {
+		StatementID int `json:"statement_id"`
+		Series      []struct {
+			Name string `json:"name"`
+			Tags struct {
+				Transaction string `json:"transaction"`
+				Suite       string `json:"suite"`
+				Statut      string `json:"statut"`
+				Application string `json:"application"`
+			} `json:"tags"`
+			Columns []string        `json:"columns"`
+			Values  [][]interface{} `json:"values"`
+		} `json:"series"`
+	} `json:"results"`
+}
 
-//Запись в лог при включенном дебаге
-func processdebug(logtext interface{}) {
-	if DebugFlag {
-		if LogFlag {
-			log.Println(logtext)
+//структура influx type 2 для сценария
+type MeanScenario struct {
+	Results []struct {
+		StatementID int `json:"statement_id"`
+		Series      []struct {
+			Name string `json:"name"`
+			Tags struct {
+				Transaction string `json:"transaction"`
+				Suite       string `json:"suite"`
+				Statut      string `json:"statut"`
+				Application string `json:"application"`
+			} `json:"tags"`
+			Columns []string        `json:"columns"`
+			Values  [][]interface{} `json:"values"`
+		} `json:"series"`
+	} `json:"results"`
+}
+
+//для преобразования типа ответа инфлюкса
+type SField struct {
+	NameCol   string
+	ValFloat  float64
+	ValInt    int64
+	ValString string
+	ValTime   int64
+}
+
+//Структруа ответа инфлюкса по тестам
+type LTTestDinamic struct {
+	NameTest string
+	Field    []YField
+}
+
+//для хранения поля ответа
+type YField struct {
+	Name        string
+	Value       float64
+	Description string
+	Statut      string
+}
+
+// InfluxClient представляет клиент для работы
+type InfluxClient struct {
+	baseURL string
+	auth    string
+	client  *http.Client
+	logFunc func(string, interface{})
+	debug   bool
+}
+
+// NewPrometheusClient создает новый экземпляр клиента
+func NewInfluxClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *InfluxClient {
+	return &InfluxClient{
+		baseURL: baseURL,
+		auth:    auth,
+		client:  &http.Client{Timeout: 30 * time.Second},
+		logFunc: logFunc,
+		debug:   debug,
+	}
+}
+
+func (p *InfluxClient) Close() {
+	p.client.CloseIdleConnections()
+}
+
+func (p *InfluxClient) ProcessDebug(t interface{}) {
+	if p.debug {
+		p.logFunc("DEBUG", t)
+	}
+}
+
+func (p *InfluxClient) GetDataSourceThreshold(query string) (float64, error) {
+	var percentile float64
+	resp_inf, err := http.NewRequest("GET", p.baseURL+""+query, nil)
+	if err != nil {
+		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+	}
+	if p.auth != "" {
+		resp_inf.Header.Add("Authorization", p.auth)
+	}
+	p.ProcessDebug("Get Influx threshold request: " + p.baseURL + "" + query)
+
+	rsp_inf, err := p.client.Do(resp_inf)
+
+	if err != nil {
+		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+	}
+	defer rsp_inf.Body.Close()
+
+	if rsp_inf.StatusCode == http.StatusOK {
+		p.logFunc("INFO", "Request Influx threshold success")
+		infjson_child, err := JsonINfluxParse(rsp_inf)
+		if err == nil {
+			percentile = JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
 		} else {
-			fmt.Println(logtext)
+			return 0, err
 		}
+	} else {
+		return 0, errors.New("Request Influx threshold error" + strconv.Itoa(rsp_inf.StatusCode) + " " + p.baseURL)
+	}
+
+	return percentile, nil
+}
+
+func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
+	resp_inf, err := http.NewRequest("GET", p.baseURL+""+query, nil)
+	if err != nil {
+		return Mean{}, fmt.Errorf("GetDataMean request failed: %v", err)
+	}
+	if p.auth != "" {
+		resp_inf.Header.Add("Authorization", p.auth)
+	}
+	p.logFunc("INFO", "Influx request "+p.baseURL+""+query)
+
+	rsp_inf, err := p.client.Do(resp_inf)
+	if err != nil {
+		return Mean{}, fmt.Errorf("GetDataMean request failed: %v", err)
+	}
+	defer rsp_inf.Body.Close()
+
+	if rsp_inf.StatusCode == http.StatusOK {
+		p.logFunc("INFO", "Request Influx success")
+		infjson, err := JsonINfluxParse(rsp_inf)
+		if err == nil {
+			return infjson, nil
+		} else {
+			return Mean{}, fmt.Errorf("GetDataMean error parse: %v", err)
+		}
+	} else {
+		return Mean{}, fmt.Errorf("influx API returned status %d: %s", rsp_inf.StatusCode, p.baseURL+query)
 	}
 }
 
@@ -34,8 +176,16 @@ func JsonINfluxFiledParse(field interface{}) SField {
 		if err != nil {
 			fieldp.ValFloat = 0
 		}
+		fieldp.ValInt, err = field.(json.Number).Int64()
+		if err != nil {
+			fieldp.ValFloat = 0
+		}
+		fieldp.ValString = field.(json.Number).String()
 	} else {
 		fieldp.ValFloat = 0
+		fieldp.ValInt = 0
+		fieldp.ValString = ""
+		fieldp.ValTime = 0
 	}
 
 	return fieldp
@@ -52,7 +202,6 @@ func JsonINfluxFiledParseInt(field interface{}) int64 {
 }
 
 func JsonINfluxParse(resp *http.Response) (Mean, error) {
-
 	var infjson Mean
 
 	decoder := json.NewDecoder(resp.Body)
@@ -61,18 +210,15 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 	err = decoder.Decode(&infjson)
 
 	if err != nil {
-		log.Println(err)
-		return infjson, err
+		return infjson, fmt.Errorf("INFLUX: %v", err)
 	}
 
 	if len(infjson.Results) == 0 {
-		log.Printf("Expected exactly one result in response, got %d", len(infjson.Results))
-		return infjson, errors.New("Expected exactly one result in response")
+		return infjson, fmt.Errorf("Expected exactly one result in response, got %d", len(infjson.Results))
 	}
 
 	if len(infjson.Results[0].Series) == 0 {
-		log.Printf("Expected exactly one series in result, got %d", len(infjson.Results[0].Series))
-		return infjson, errors.New("Expected exactly one series in result")
+		return infjson, fmt.Errorf("Expected exactly one series in result, got %d", len(infjson.Results[0].Series))
 	}
 
 	return infjson, nil

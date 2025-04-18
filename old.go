@@ -13,7 +13,7 @@ import (
 //Работа с динамикой в InfluxJmeterScenario()
 func InfluxJmeterScenarioOld() {
 
-	request := cfg.JmeterInflux + url.QueryEscape(cfg.JmeterQueryScenario+timeperiod+cfg.JmeterQueryScnrGroup)
+	request := cfg.JmeterInflux + url.QueryEscape(cfg.JmeterQueryScenario+timeperiod_influx+cfg.JmeterQueryScnrGroup)
 
 	ProcessDebug("JmeterScenario")
 	ProcessDebug(request)

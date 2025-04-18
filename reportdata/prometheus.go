@@ -2,10 +2,10 @@ package reportdata
 
 import (
 	"encoding/json"
-	"errors"
-	"log"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type PrometheusResponse struct {
@@ -22,6 +22,70 @@ type PrometheusResponse struct {
 	} `json:"data"`
 }
 
+// PrometheusClient представляет клиент для работы
+type PrometheusClient struct {
+	baseURL string
+	auth    string
+	client  *http.Client
+	logFunc func(string, interface{})
+	debug   bool
+}
+
+// NewPrometheusClient создает новый экземпляр клиента
+func NewPrometheusClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *PrometheusClient {
+	return &PrometheusClient{
+		baseURL: baseURL,
+		auth:    auth,
+		client:  &http.Client{Timeout: 30 * time.Second},
+		logFunc: logFunc,
+		debug:   debug,
+	}
+}
+
+func (p *PrometheusClient) Close() {
+	p.client.CloseIdleConnections()
+}
+
+func (p *PrometheusClient) ProcessDebug(t interface{}) {
+	if p.debug {
+		p.logFunc("DEBUG", t)
+	}
+}
+
+func (p *PrometheusClient) GetDataSourceThreshold(query string) (float64, error) {
+	var percentile float64
+	req, err := http.NewRequest("GET", p.baseURL+"/api/v1/query?query="+query, nil)
+	if err != nil {
+		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+	}
+	req.Header.Add("Authorization", p.auth)
+
+	p.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
+	resp, err := p.client.Do(req)
+
+	if err != nil {
+		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		p.logFunc("INFO", "Request prometheus threshold success")
+
+		var prom PrometheusResponse
+		err = prom.JsonPrometheusParse(resp)
+		if err == nil {
+			percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
+		} else {
+			return 0, err
+		}
+
+	} else {
+		return 0, fmt.Errorf("PROMETEUS: Request prometheus threshold error " + strconv.Itoa(resp.StatusCode) + " " + p.baseURL)
+	}
+
+	return percentile, nil
+}
+
 func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 
 	decoder := json.NewDecoder(resp.Body)
@@ -30,18 +94,15 @@ func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 	err = decoder.Decode(&p)
 
 	if err != nil {
-		log.Println(err)
-		return err
+		return fmt.Errorf("PROMETEUS: %v", err)
 	}
 
 	if p.Status != "success" {
-		log.Printf("Expected exactly one result in response, got %s", p.Status)
-		return errors.New("Expected exactly one result in response")
+		return fmt.Errorf("PROMETEUS: Expected exactly one result in response, got %s", p.Status)
 	}
 
 	if len(p.Data.Result) == 0 {
-		log.Printf("Expected exactly one series in result, got %d", len(p.Data.Result))
-		return errors.New("Expected exactly one series in result")
+		return fmt.Errorf("PROMETEUS: Expected exactly one series in result, got %d", len(p.Data.Result))
 	}
 
 	return nil

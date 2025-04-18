@@ -1,6 +1,7 @@
 package reportdata
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -125,6 +126,38 @@ type Config struct {
 			Height int
 		}
 	} `json:"GrafanaDash"`
+	GrafanadashTemplate []struct {
+		Name string `json:"Name"`
+		// авторизация на графане
+		AuthHeader string `json:"AuthHeader"`
+		// ссылка на даш
+		Urldash string `json:"UrlDash"`
+		// ссылка на панель
+		Urlpanel string `json:"UrlPanel"`
+		// Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+		Urlimg string `json:"UrlImg"`
+		// Источник данных
+		SourceType int `json:"SourceType"`
+		// запрос данных для даша
+		Query string `json:"Query"`
+		// Порог для запроса
+		Threshold int `json:"Threshold"`
+		// Описание порога
+		ThDescription string `json:"ThDescription"`
+		// ссылка на запрос данных, смотреть в графане
+		UrlQuery string `json:"UrlQuery"`
+		// группировка
+		UrlQueryGroup string `json:"UrlQueryGroup"`
+		Size          struct {
+			Width  int
+			Height int
+		}
+		// Добавлять график если порог стреляет
+		ThresholdFilter bool `json:"ThresholdFilter"`
+		// Список
+		FileList    string `json:"FileList"`
+		FilePettern string `json:"FilePettern"`
+	} `json:"GrafanadashTemplate"`
 }
 
 // Вынесена структар из конфига
@@ -133,76 +166,6 @@ type JmeterQScnrFieldS struct {
 	Name string `json:"Name"`
 	//Описание
 	Description string `json:"Description"`
-}
-
-//структура influx type 1
-type Mean struct {
-	Results []struct {
-		StatementID int `json:"statement_id"`
-		Series      []struct {
-			Name string `json:"name"`
-			Tags struct {
-				Transaction string `json:"transaction"`
-				Suite       string `json:"suite"`
-				Statut      string `json:"statut"`
-				Application string `json:"application"`
-			} `json:"tags"`
-			Columns []string        `json:"columns"`
-			Values  [][]interface{} `json:"values"`
-		} `json:"series"`
-	} `json:"results"`
-}
-
-//структура influx type 2 для сценария
-type MeanScenario struct {
-	Results []struct {
-		StatementID int `json:"statement_id"`
-		Series      []struct {
-			Name string `json:"name"`
-			Tags struct {
-				Transaction string `json:"transaction"`
-				Suite       string `json:"suite"`
-				Statut      string `json:"statut"`
-				Application string `json:"application"`
-			} `json:"tags"`
-			Columns []string        `json:"columns"`
-			Values  [][]interface{} `json:"values"`
-		} `json:"series"`
-	} `json:"results"`
-}
-
-//для преобразования типа ответа инфлюкса
-type SField struct {
-	NameCol   string
-	ValFloat  float64
-	ValInt    int64
-	ValString string
-	ValTime   int64
-}
-
-//Структруа ответа инфлюкса по тестам
-//Устарело, смотри LTTestDinamic
-type LTTest struct {
-	NameTest   string
-	Rate       float64
-	Avg        float64
-	Errpct     float64
-	Percentile float64
-	Maxlatency float64
-}
-
-//Структруа ответа инфлюкса по тестам
-type LTTestDinamic struct {
-	NameTest string
-	Field    []YField
-}
-
-//для хранения поля ответа
-type YField struct {
-	Name        string
-	Value       float64
-	Description string
-	Statut      string
 }
 
 //для хранения ключей и создания карты по порогам и их описания
@@ -253,6 +216,9 @@ type LTGrag struct {
 		Height int
 	}
 }
+
+// Формирование списка для динамических шаблонов
+type DinamicRecord map[string]string
 
 func BeginningOfDay() time.Time {
 	t := time.Now()
@@ -325,10 +291,52 @@ func Helpstart() {
 	fmt.Println("Use -start and -end for generate a report on an arbitrary date ")
 }
 
-func max(x int, y int) int {
+func MaxInt(x int, y int) int {
 	if x > y {
 		return x
 	} else {
 		return y
 	}
+}
+
+func MaxInt64(x int64, y int64) int64 {
+	if x > y {
+		return x
+	} else {
+		return y
+	}
+}
+
+func MinInt64(x int64, y int64) int64 {
+	if x < y {
+		return x
+	} else {
+		return y
+	}
+}
+
+func ConvJsonNumFloat64(p interface{}) (float64, bool) {
+	num, ok := p.(json.Number)
+	if !ok {
+		return 0, false
+	}
+
+	tmp, err := num.Float64()
+	if err != nil {
+		return 0, false
+	}
+	return tmp, true
+}
+
+func ConvJsonNumInt64(p interface{}) (int64, bool) {
+	num, ok := p.(json.Number)
+	if !ok {
+		return 0, false
+	}
+
+	tmp, err := num.Int64()
+	if err != nil {
+		return 0, false
+	}
+	return tmp, true
 }
