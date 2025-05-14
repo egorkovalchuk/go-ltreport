@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
-	"sort"
 	"time"
 )
 
@@ -56,7 +55,7 @@ func (gc *GraphiteClient) ProcessDebug(t interface{}) {
 func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]MetricResponse, error) {
 
 	requestURL := gc.baseURL + "/render?" + "target=" + target + "&from=" + fmt.Sprintf("%d", from.Unix()) + "&until=" + fmt.Sprintf("%d", until.Unix()) + "&format=json"
-
+	//gc.ProcessDebug(requestURL)
 	rsp, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
 		gc.ProcessDebug("Get Graphite threshold request: " + requestURL)
@@ -136,29 +135,6 @@ func (gc *GraphiteClient) ListMetrics() ([]string, error) {
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 	return metrics, nil
-}
-
-// CalculatePercentile вычисляет заданный персентиль для набора значений
-func CalculatePercentile(values []float64, percentile float64) float64 {
-	if len(values) == 0 {
-		return math.NaN()
-	}
-
-	// Сортируем значения
-	sort.Float64s(values)
-
-	// Вычисляем индекс персентиля
-	index := (percentile / 100) * float64(len(values)-1)
-
-	// Если индекс целый - возвращаем соответствующее значение
-	if index == float64(int(index)) {
-		return values[int(index)]
-	}
-
-	// Интерполируем между соседними значениями
-	i := int(index)
-	fraction := index - float64(i)
-	return values[i] + fraction*(values[i+1]-values[i])
 }
 
 // Get99thPercentile вычисляет 99-й персентиль для указанной метрики

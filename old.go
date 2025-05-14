@@ -23,7 +23,7 @@ func InfluxJmeterScenarioOld() {
 		log.Println(err)
 	}
 
-	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+	if resp.StatusCode != http.StatusOK {
 		log.Println("HTTP Status is in the 2xx range " + request)
 	} else {
 		log.Println("HTTP Status error " + strconv.Itoa(resp.StatusCode) + " " + request)
@@ -57,7 +57,7 @@ func InfluxJmeterScenarioOld() {
 
 		var avgcount float64
 
-		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		if resp.StatusCode != http.StatusOK {
 
 			log.Println("HTTP Status is in the 2xx range " + request)
 			infjson_child, err := reportdata.JsonINfluxParse(resp)
@@ -84,7 +84,7 @@ func InfluxJmeterScenarioOld() {
 
 		var avgcountr float64
 
-		if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		if resp.StatusCode != http.StatusOK {
 			log.Println("HTTP Status is in the 2xx range " + request)
 
 			infjson_child, err := reportdata.JsonINfluxParse(resp)

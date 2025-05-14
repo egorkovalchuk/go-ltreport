@@ -27,7 +27,7 @@
 		"Server" : "localhost:1234"
 		"User" : "stress_test",
 		"Pass" : "",
-		"Token" : ""
+		"Token" : "",
 		"Query" : [
 			{ "sql" : "",
 			  "dbname" : "",
@@ -62,19 +62,12 @@
 			{"Name": "Maxlatency", "Description":"Max latency %d ms" },
 			{"Name": "Percentile50", "Description":"Percentile 50 %d ms" }
 		],
-	"JmeterQueryThreshold":     [
-			{"Name":"oapi-get", "ErrorField":"ErrorPercent", "Threshold": 20, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"oapi-get", "ErrorField":"Maxlatency", "Threshold": 400, "Description": "The latency is higher %d ms in test %s current %d ms"}, 
-			{"Name":"*", "ErrorField":"Percentile50", "Threshold": 400, "Description": "The Percentile50 latency is higher %d ms in test %s current %d ms"}, 
-			{"Name":"cam", "ErrorField":"ErrorPercent","Threshold": 50, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"ccmp_ro_cc_oper", "ErrorField":"ErrorPercent","Threshold": 40, "Description": "The error is higher %d in test %s current %d"}
-		],
 	// Тестовые сценари пер тест с порогами
 	"JmeterQueryThreshold":     [
 			{"Name":"oapi-get", "ErrorField":"ErrorPercent", "Threshold": 3, "Description": "The error is higher %d in test %s current %d"}, 
 			{"Name":"oapi-get", "ErrorField":"Maxlatency", "Threshold": 400, "Description": "The error is higher %d in test %s current %d"}, 
 			{"Name":"cam", "ErrorField":"ErrorPercent","Threshold": 50, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"ccmp_ro_cc_oper", "ErrorField":"ErrorPercent","Threshold": 40, "Description": "The error is higher %d in test %s current %d"}
+			{"Name":"oapi-set", "ErrorField":"ErrorPercent","Threshold": 40, "Description": "The error is higher %d in test %s current %d"}
 	],
 	"JmeterQueryScenario": "SELECT max(\"pct90.0\"), max(\"max\"), mean(\"count\") FROM \"details\" WHERE ",
 	"JmeterQueryScnrGroup": " GROUP BY time(1d), \"application\", \"transaction\", \"statut\" fill(0) ORDER BY time DESC",
@@ -101,8 +94,9 @@
              // Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
 			 "UrlImg":   "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
 			 // запрос данных для даша
-             "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /sib-oapi-krf[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
-			 // SourceType: 1 телеграф, 2 прометеус 
+             "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
+			 // 1 телеграф, 2 прометеус, 3 graphite-api
+			 SourceType: 1,  
 			 // ссылка на запрос данных, смотреть в графане
              "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
 			 // группировка
@@ -127,8 +121,9 @@
              // Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
 			 "UrlImg":   "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
 			 // запрос данных для даша
-             "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /sib-oapi-krf[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
-			 // SourceType: 1 телеграф, 2 прометеус, graphite-api
+             "Query":    "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') " ,
+			 // 1 телеграф, 2 прометеус, 3 graphite-api
+			 SourceType: 1, 
 			 // ссылка на запрос данных, смотреть в графане
              "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
 			 // группировка

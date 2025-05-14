@@ -2,6 +2,7 @@ package reportdata
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -82,7 +83,8 @@ func (p *GrafanaClient) GetImage(Name string) (string, error) {
 
 		defer rsp.Body.Close()
 		defer file.Close()
-
+	} else {
+		return contentype, fmt.Errorf("grafana API returned status %d", rsp.StatusCode)
 	}
 
 	return contentype, nil

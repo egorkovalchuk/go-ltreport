@@ -24,9 +24,20 @@ var (
 	timeperiod_influx     string
 	timeperiod_prometheus string
 	timeperiod_clickhouse string
-	timewrap              string
+	timeperiod_grafana    string
 	timeperiodstart       time.Time
 	timeperiodend         time.Time
+	// FSM connect
+	LoginFSM string
+	PassFSM  string
+	// Proxy
+	// Confluence
+	ConflProxy string
+	ConfToken  string
+
+	// ClickHouse
+	CHUser string
+	CHPass string
 )
 
 // Запись ошибок из горутин
@@ -127,6 +138,7 @@ func readconf(cfg *reportdata.Config, confname string) {
 		ProcessPanic(err)
 		fmt.Println(err)
 	}
+	defer file.Close()
 
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&cfg)
@@ -141,7 +153,6 @@ func readconf(cfg *reportdata.Config, confname string) {
 func redefinitionconf() {
 
 	// Замена переменных для FSM
-	// переместить?
 	if LoginFSM != "" {
 		cfg.ReportIM.LoginFSM = LoginFSM
 	}
@@ -185,7 +196,7 @@ func InitTime() {
 		timeperiodstart, timeperiodend = FindTimeWorkTest()
 	}
 
-	timewrap = "&from=" + fmt.Sprintf("%d", timeperiodstart.Unix()) + "000&to=" + fmt.Sprintf("%d", timeperiodend.Unix()) + "000"
+	timeperiod_grafana = "&from=" + fmt.Sprintf("%d", timeperiodstart.Unix()) + "000&to=" + fmt.Sprintf("%d", timeperiodend.Unix()) + "000"
 	timeperiod_influx = ` time >= ` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", timeperiodend.Unix()) + `000ms `
 	timeperiod_prometheus = `&start=` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `&end=` + fmt.Sprintf("%d", timeperiodend.Unix())
 	timeperiod_clickhouse = " timestamp>=toDateTime('" + timeperiodstart.Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + timeperiodend.Format("2006-01-02 15:04:05") + "') "
@@ -200,6 +211,7 @@ func FindTimeWorkTest() (time.Time, time.Time) {
 	if err != nil {
 		ProcessWarm("FindTimeWorkTest error")
 		ProcessWarm(err)
+		ProcessDebug("Start generate report with default time(09:00-19:00)")
 		return reportdata.BeginningOfDay(), reportdata.EndOfDay()
 	}
 	// Проверка наличия данных

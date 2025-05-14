@@ -52,38 +52,43 @@ func (p *PrometheusClient) ProcessDebug(t interface{}) {
 	}
 }
 
-func (p *PrometheusClient) GetDataSourceThreshold(query string) (float64, error) {
-	var percentile float64
+func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error) {
 	req, err := http.NewRequest("GET", p.baseURL+"/api/v1/query?query="+query, nil)
 	if err != nil {
-		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %v", err)
 	}
 	req.Header.Add("Authorization", p.auth)
-
-	p.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
 	resp, err := p.client.Do(req)
 
 	if err != nil {
-		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
+		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		p.logFunc("INFO", "Request prometheus threshold success")
-
 		var prom PrometheusResponse
 		err = prom.JsonPrometheusParse(resp)
-		if err == nil {
-			percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
+		if err != nil {
+			return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Error parse: %v", err)
 		} else {
-			return 0, err
+			return prom, nil
 		}
-
 	} else {
-		return 0, fmt.Errorf("PROMETEUS: Request prometheus threshold error " + strconv.Itoa(resp.StatusCode) + " " + p.baseURL)
+		return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Request prometheus threshold error " + strconv.Itoa(resp.StatusCode) + " " + p.baseURL)
 	}
+}
 
-	return percentile, nil
+func (p *PrometheusClient) GetThreshold(query string) (float64, error) {
+	var percentile float64
+	p.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
+	prom, err := p.GetDataMean(query)
+	if err == nil {
+		percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
+		return percentile, nil
+	} else {
+		return 0, err
+	}
 }
 
 func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {

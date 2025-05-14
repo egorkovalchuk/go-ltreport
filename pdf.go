@@ -30,6 +30,9 @@ func ReportEnd() {
 	pdf.SetCompression(true)
 	// запись отчета
 	pdf.OutputFileAndClose(reportfilename + ".pdf")
+	if err != nil {
+		ProcessError(err)
+	}
 }
 
 func ReportProblemPDF() {

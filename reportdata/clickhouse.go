@@ -72,19 +72,22 @@ func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod str
 
 	rsp, err := p.client.Do(resp)
 	if err != nil {
+		p.logFunc("ERROR", fmt.Errorf("GetSql request failed: %v", err))
 		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %v", err)
 	}
 
 	if rsp.StatusCode == http.StatusOK {
 		p.logFunc("INFO", "Query ClickHouse succes ")
 	} else {
-		return ClickHouseJson{}, err
+		p.logFunc("ERROR", fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
+		return ClickHouseJson{}, fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode)
 	}
 
 	var clkhouse ClickHouseJson
 	err = clkhouse.JsonClickHouseParse(rsp, name)
 	if err != nil {
-		return ClickHouseJson{}, err
+		p.logFunc("ERROR", fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err))
+		return ClickHouseJson{}, fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err)
 	}
 
 	p.client.CloseIdleConnections()

@@ -2,8 +2,8 @@ package reportdata
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -105,37 +105,15 @@ func (p *InfluxClient) ProcessDebug(t interface{}) {
 	}
 }
 
-func (p *InfluxClient) GetDataSourceThreshold(query string) (float64, error) {
+func (p *InfluxClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
-	resp_inf, err := http.NewRequest("GET", p.baseURL+""+query, nil)
-	if err != nil {
-		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
-	}
-	if p.auth != "" {
-		resp_inf.Header.Add("Authorization", p.auth)
-	}
-	p.ProcessDebug("Get Influx threshold request: " + p.baseURL + "" + query)
-
-	rsp_inf, err := p.client.Do(resp_inf)
-
-	if err != nil {
-		return 0, fmt.Errorf("GetDataSourceThreshold request failed: %v", err)
-	}
-	defer rsp_inf.Body.Close()
-
-	if rsp_inf.StatusCode == http.StatusOK {
-		p.logFunc("INFO", "Request Influx threshold success")
-		infjson_child, err := JsonINfluxParse(rsp_inf)
-		if err == nil {
-			percentile = JsonINfluxFiledParseFloat(infjson_child.Results[0].Series[0].Values[0][1])
-		} else {
-			return 0, err
-		}
+	metrics, err := p.GetDataMean(query)
+	if err == nil {
+		percentile = JsonINfluxFiledParseFloat(metrics.Results[0].Series[0].Values[0][1])
+		return percentile, nil
 	} else {
-		return 0, errors.New("Request Influx threshold error" + strconv.Itoa(rsp_inf.StatusCode) + " " + p.baseURL)
+		return 0, err
 	}
-
-	return percentile, nil
 }
 
 func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
@@ -167,25 +145,61 @@ func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 	}
 }
 
+// Get99thPercentile вычисляет 99-й персентиль для указанной метрики
+func (p *InfluxClient) Get99thPercentile(query string) (float64, error) {
+	metrics, err := p.GetDataMean(query)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(metrics.Results) == 0 || len(metrics.Results[0].Series) == 0 {
+		return 0, fmt.Errorf("no metrics found for query %s", query)
+	}
+
+	// Собираем все значения
+	var values []float64
+	for _, dp := range metrics.Results[0].Series {
+		for _, v := range dp.Values {
+			value, ok1 := v[1].(float64)
+			if !ok1 {
+				continue
+			}
+			if !math.IsNaN(value) {
+				values = append(values, value)
+			}
+		}
+	}
+
+	if len(values) == 0 {
+		return 0, fmt.Errorf("no valid data points found")
+	}
+
+	// Вычисляем 99-й персентиль
+	return CalculatePercentile(values, 99), nil
+}
+
 func JsonINfluxFiledParse(field interface{}) SField {
 	var fieldp SField
-	var err error
 
 	if field != nil {
-		fieldp.ValFloat, err = field.(json.Number).Float64()
-		if err != nil {
+		if ff, ok := field.(string); ok {
+			fieldp.ValString = ff
+			if s, err := strconv.ParseFloat(ff, 64); err == nil {
+				fieldp.ValFloat = s
+			} else {
+				fieldp.ValFloat = 0
+			}
+			if s, err := strconv.ParseInt(ff, 0, 64); err == nil {
+				fieldp.ValInt = s
+			} else {
+				fieldp.ValInt = 0
+			}
+		} else {
 			fieldp.ValFloat = 0
 		}
-		fieldp.ValInt, err = field.(json.Number).Int64()
-		if err != nil {
-			fieldp.ValFloat = 0
-		}
-		fieldp.ValString = field.(json.Number).String()
+
 	} else {
 		fieldp.ValFloat = 0
-		fieldp.ValInt = 0
-		fieldp.ValString = ""
-		fieldp.ValTime = 0
 	}
 
 	return fieldp
@@ -213,12 +227,8 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 		return infjson, fmt.Errorf("INFLUX: %v", err)
 	}
 
-	if len(infjson.Results) == 0 {
+	if len(infjson.Results) == 0 || len(infjson.Results[0].Series) == 0 {
 		return infjson, fmt.Errorf("Expected exactly one result in response, got %d", len(infjson.Results))
-	}
-
-	if len(infjson.Results[0].Series) == 0 {
-		return infjson, fmt.Errorf("Expected exactly one series in result, got %d", len(infjson.Results[0].Series))
 	}
 
 	return infjson, nil

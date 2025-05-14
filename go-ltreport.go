@@ -28,18 +28,6 @@ const (
 var (
 	// Configuration
 	cfg reportdata.Config
-	// FSM connect
-	LoginFSM string
-	PassFSM  string
-	// Proxy
-	// Confluence
-	ConflProxy string
-	ConfToken  string
-
-	// ClickHouse
-	CHUser string
-	CHPass string
-
 	// режим работы сервиса(дебаг мод)
 	debugm bool
 	// Запись в лог
@@ -110,6 +98,11 @@ func main() {
 	readconf(&cfg, confname)
 	//  Замена на приоритетный конфиг из командной строки
 	redefinitionconf()
+
+	if cfg.ReportConfluenceOn && cfg.ReportConfluenceURL == "" {
+		fmt.Printf("Confluence URL is required when ReportConfluenceOn=true")
+		return
+	}
 
 	InitTime()
 
@@ -189,9 +182,11 @@ func StartReport() {
 	ReportEnd()
 
 	if cfg.ReportConfluenceOn {
+		ProcessInfo("Start load report on confluence")
 		ReportDownload(reportfilename + ".pdf")
 	}
-
+	//ProcessDebug(Problems)
+	//ProcessDebug(LTGrafs)
 }
 
 func ReportInflux() {
@@ -401,7 +396,7 @@ func GrafanaReport() {
 	for _, i := range cfg.Grafanadash {
 
 		ProcessInfo("Load grafana " + i.Name)
-		request := i.Urlimg + timewrap
+		request := i.Urlimg + timeperiod_grafana
 		ProcessDebug("Get image request " + request)
 
 		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, ProcessLog, debugm)
@@ -410,13 +405,26 @@ func GrafanaReport() {
 
 		if err != nil {
 			ProcessError("Error generate image")
+			ProcessError(err)
+		}
+
+		p.Name = i.Name
+		p.Threshold = i.Threshold
+		p.ContentType = ConType
+		p.Size.Height = i.Size.Height
+		p.Size.Width = i.Size.Width
+		p.UrlDash = i.Urldash + timeperiod_grafana
+		LTGrafs = append(LTGrafs, p)
+
+		if i.Query == "" {
+			continue
 		}
 
 		var percentile float64
 		if i.SourceType == 2 {
 			//  получение данные из прометеуса
 			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
-			percentile, err = gcs.GetDataSourceThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
+			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 			defer gcs.Close()
 		} else if i.SourceType == 3 {
 			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
@@ -425,7 +433,7 @@ func GrafanaReport() {
 		} else {
 			//  получение данные из инфлюкса
 			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
-			percentile, err = gcs.GetDataSourceThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
+			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 			defer gcs.Close()
 		}
 
@@ -433,16 +441,7 @@ func GrafanaReport() {
 			p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 			Problems = append(Problems, p)
 		}
-
-		p.Name = i.Name
-		p.Threshold = i.Threshold
-		p.ContentType = ConType
-		p.Size.Height = i.Size.Height
-		p.Size.Width = i.Size.Width
-		p.UrlDash = i.Urldash + timewrap
-		LTGrafs = append(LTGrafs, p)
 	}
-
 	GrafanaTemplateReport()
 }
 
@@ -483,12 +482,16 @@ func GrafanaTemplateReport() {
 					}
 					record := make(reportdata.DinamicRecord, colunmlen)
 
-					tmp := i.Urldash
+					tmp_dash := i.Urldash
 					tmp_query := i.Query
+					tmp_image := i.Urlimg
+					tmp_name := i.Name
 					for jj, head := range headers {
 						record[head] = line[jj]
-						tmp = strings.Replace(tmp, "{"+head+"}", line[jj], 1)
+						tmp_dash = strings.Replace(tmp_dash, "{"+head+"}", line[jj], 1)
 						tmp_query = strings.Replace(tmp_query, "{"+head+"}", line[jj], 1)
+						tmp_image = strings.Replace(tmp_image, "{"+head+"}", line[jj], 1)
+						tmp_name = strings.Replace(tmp_name, "{"+head+"}", line[jj], 1)
 					}
 					result = append(result, record)
 
@@ -496,7 +499,7 @@ func GrafanaTemplateReport() {
 					if i.SourceType == 2 {
 						//  получение данные из прометеуса
 						gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
-						percentile, err = gcs.GetDataSourceThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
+						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 						defer gcs.Close()
 					} else if i.SourceType == 3 {
 						gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
@@ -505,13 +508,31 @@ func GrafanaTemplateReport() {
 					} else {
 						//  получение данные из инфлюкса
 						gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
-						percentile, err = gcs.GetDataSourceThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
+						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 						defer gcs.Close()
 					}
 					if percentile > float64(i.Threshold) && err == nil {
-						ProcessDebug(i.Name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
-						p := reportdata.LTError{Name: "Grafana: " + i.Name + " " + strings.Join(line, ", "), Threshold: i.Threshold, Description: i.ThDescription + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
+						ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
+						p := reportdata.LTError{Name: "Grafana: " + tmp_name + " " + strings.Join(line, ", "), Threshold: i.Threshold, Description: i.ThDescription + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 						Problems = append(Problems, p)
+
+						gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, ProcessLog, debugm)
+						ConType, err := gc.GetImage(tmp_name)
+						defer gc.Close()
+
+						if err != nil {
+							ProcessError("Error generate image")
+							ProcessError(err)
+						} else {
+							var p reportdata.LTGrag
+							p.Name = tmp_name
+							p.Threshold = i.Threshold
+							p.ContentType = ConType
+							p.Size.Height = i.Size.Height
+							p.Size.Width = i.Size.Width
+							p.UrlDash = tmp_dash + timeperiod_grafana
+							LTGrafs = append(LTGrafs, p)
+						}
 					} else if err != nil {
 						ProcessError(err)
 					}
@@ -531,6 +552,8 @@ func ClickHouseReport() {
 		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name, timeperiod_clickhouse)
 		if err == nil {
 			LTClickHouse = append(LTClickHouse, clkhouse)
+		} else {
+			ProcessError(err)
 		}
 	}
 	defer ch.Close()
@@ -604,7 +627,7 @@ func ReportDownload(reportfilename string) {
 			Type:  "page",
 			Title: reportname,
 			Ancestors: []confluence.Ancestor{
-				confluence.Ancestor{
+				{
 					ID: JsonCont.ID,
 				},
 			},

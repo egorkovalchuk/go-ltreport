@@ -3,6 +3,9 @@ package reportdata
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"net/http"
+	"sort"
 	"time"
 )
 
@@ -339,4 +342,46 @@ func ConvJsonNumInt64(p interface{}) (int64, bool) {
 		return 0, false
 	}
 	return tmp, true
+}
+
+func CheckStatusCode(StatusCode int, Status string) error {
+	switch StatusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusPartialContent:
+		return nil
+	case http.StatusNoContent, http.StatusResetContent:
+		return nil
+	case http.StatusUnauthorized:
+		return fmt.Errorf("authentication failed")
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("service is not available: %s", Status)
+	case http.StatusInternalServerError:
+		return fmt.Errorf("internal server error: %s", Status)
+	case http.StatusConflict:
+		return fmt.Errorf("conflict: %s", Status)
+	default:
+		return fmt.Errorf("unknown response status: %s", Status)
+	}
+}
+
+// CalculatePercentile вычисляет заданный персентиль для набора значений
+func CalculatePercentile(values []float64, percentile float64) float64 {
+	if len(values) == 0 {
+		return math.NaN()
+	}
+
+	// Сортируем значения
+	sort.Float64s(values)
+
+	// Вычисляем индекс персентиля
+	index := (percentile / 100) * float64(len(values)-1)
+
+	// Если индекс целый - возвращаем соответствующее значение
+	if index == float64(int(index)) {
+		return values[int(index)]
+	}
+
+	// Интерполируем между соседними значениями
+	i := int(index)
+	fraction := index - float64(i)
+	return values[i] + fraction*(values[i+1]-values[i])
 }

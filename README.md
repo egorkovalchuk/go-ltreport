@@ -1,7 +1,11 @@
 # Load Test Report
 Utility for Generating Load Testing Reports
+- **JMeter** (via InfluxDB)  
+- **Grafana** (dashboards and graphs)  
+- **ClickHouse** (analytics)  
+- **Confluence** (publishing results)  
 
-## Project Description
+## **Project Description**
 LT report is a tool designed to automate the analysis and generation of reports based on load testing results. This project is aimed at developers, QA engineers, and DevOps specialists who need to quickly convert raw metrics into structured reports in a convenient format.
 
 A utility for automating the generation of comprehensive reports based on load testing results, with integration into:
@@ -12,14 +16,14 @@ A utility for automating the generation of comprehensive reports based on load t
 * Confluence
 * HP Service Manager
 
-## Key Features
+## **Key Features**
 * Automatic collection of metrics from various sources
 * Analysis of threshold value exceedances
 * Generation of PDF reports with charts and tables
 * Uploading reports to Confluence
 * Support for custom time periods
 
-## Usage
+## **Usage**
 * Use -v gor get version
 * Use -d start with debug mode
 * Use -c start with users config
@@ -33,8 +37,8 @@ A utility for automating the generation of comprehensive reports based on load t
 * Use -CHUser ClickHouse username
 * Use -CHPass ClickHouse password
 
-## Report Generation
-### Structure of the PDF Report
+## **Report Generation**
+### **Structure of the PDF Report**
 * Title Page with Date
 * Summary of Incidents
 * Grafana Charts
@@ -42,14 +46,14 @@ A utility for automating the generation of comprehensive reports based on load t
 * Detailed Test Statistics
 * Analysis of Load Testing Scenarios
 
-## Integration with Confluence
+## **Integration with Confluence**
 To upload reports, you need to:
 * Specify credentials in the configuration file.
 * Set the ID of the target page.
 * Ensure write permissions are granted.
 Reports are automatically created as child pages in Confluence with attached PDF files.
 
-## Example 
+## **Examples**  
 ``` bash
 # Стандартный отчет за день
 ./ltreport -c config.json
@@ -60,3 +64,18 @@ Reports are automatically created as child pages in Confluence with attached PDF
 # Режим отладки
 ./ltreport -d -c custom_config.json
 ```
+---
+
+## **How to Contribute?**  
+1. 🐞 Report bugs in **Issues**.  
+2. 💡 Suggest improvements via **Pull Requests**.  
+3. 📢 Spread the word!  
+---
+
+## **License**  
+MIT License.  
+
+--- 
+
+**Author:** [Egor Kovalchuk](https://github.com/egorkovalchuk)  
+**Version:** 0.4.0
