@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/egorkovalchuk/go-ltreport/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -17,7 +17,7 @@ var (
 
 func ReportInit() {
 
-	ProcessInfo("File name " + reportfilename)
+	logs.ProcessInfo("File name " + reportfilename)
 	// Инициализация pdf
 	pdf = gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
@@ -29,14 +29,14 @@ func ReportEnd() {
 	// сжатие
 	pdf.SetCompression(true)
 	// запись отчета
-	pdf.OutputFileAndClose(reportfilename + ".pdf")
+	err := pdf.OutputFileAndClose(reportfilename + ".pdf")
 	if err != nil {
-		ProcessError(err)
+		logs.ProcessError(err)
 	}
 }
 
 func ReportProblemPDF() {
-	ProcessDebug("Start generate pdf - Problem ")
+	logs.ProcessDebug("Start generate pdf - Problem ")
 	for _, i := range Problems {
 		if i.Type == "Grafana" || i.Type == "" {
 			pdf.SetFont("Times", "", 10)
@@ -47,7 +47,7 @@ func ReportProblemPDF() {
 }
 
 func ReportProblemScenPDF() {
-	ProcessDebug("Start generate pdf - Problem scenario")
+	logs.ProcessDebug("Start generate pdf - Problem scenario")
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 6)
 	pdf.SetFont("Times", "B", 16)
@@ -63,7 +63,7 @@ func ReportProblemScenPDF() {
 	}
 }
 func ReportInfluxPDF() {
-	ProcessDebug("Start generate pdf - Influx JMeter")
+	logs.ProcessDebug("Start generate pdf - Influx JMeter")
 	pdf.AddPage()
 
 	pdf.SetY(pdf.GetY() + 10)
@@ -94,7 +94,7 @@ func ReportInfluxPDF() {
 }
 
 func ReportInfluxScrnPDF() {
-	ProcessDebug("Start generate pdf - Influx Scenario Jmeter")
+	logs.ProcessDebug("Start generate pdf - Influx Scenario Jmeter")
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 10)
 	pdf.SetFont("Times", "B", 16)
@@ -171,7 +171,7 @@ func ReportInfluxScrnPDF() {
 }
 
 func GrafanaReportPDF() {
-	ProcessDebug("Start generate pdf - Grafana")
+	logs.ProcessDebug("Start generate pdf - Grafana")
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 6)
 
@@ -183,6 +183,11 @@ func GrafanaReportPDF() {
 	for _, i := range LTGrafs {
 
 		//сохранение переменных для второго и послед рисунков
+		file, err := os.Open(i.Name + ".png")
+		if err != nil {
+			logs.ProcessError(err)
+			continue
+		}
 
 		ln := pdf.PointConvert(8)
 
@@ -203,11 +208,6 @@ func GrafanaReportPDF() {
 
 		tp := pdf.ImageTypeFromMime(i.ContentType)
 
-		file, err := os.Open(i.Name + ".png")
-		if err != nil {
-			ProcessError(err)
-		}
-
 		_ = pdf.RegisterImageOptionsReader(i.Name, gofpdf.ImageOptions{ImageType: tp, ReadDpi: false, AllowNegativePosition: true}, file)
 		if pdf.Ok() {
 
@@ -225,7 +225,7 @@ func GrafanaReportPDF() {
 		if rmtmpfile {
 			e := os.Remove(file.Name())
 			if e != nil {
-				ProcessInfo(err)
+				logs.ProcessInfo(err)
 			}
 		}
 
@@ -233,7 +233,7 @@ func GrafanaReportPDF() {
 }
 
 func ClickHouseReportPDF() {
-	ProcessDebug("Start generate pdf - ClickHouse")
+	logs.ProcessDebug("Start generate pdf - ClickHouse")
 	var saveX, saveY, tmpheight float64
 	saveX = 6
 	tmpheight = 0

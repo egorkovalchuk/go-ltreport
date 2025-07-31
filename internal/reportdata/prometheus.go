@@ -3,6 +3,7 @@ package reportdata
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -117,25 +118,87 @@ func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 func (p *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) SField {
 	var fieldp SField
 
-	if field != nil {
-		if ff, ok := field.(string); ok {
-			fieldp.ValString = ff
-			if s, err := strconv.ParseFloat(ff, 64); err == nil {
-				fieldp.ValFloat = s
-			} else {
-				fieldp.ValFloat = 0
-			}
-			if s, err := strconv.ParseInt(ff, 0, 64); err == nil {
-				fieldp.ValInt = s
-			} else {
-				fieldp.ValInt = 0
-			}
-		} else {
-			fieldp.ValFloat = 0
+	if field == nil {
+		return fieldp // все поля SField уже инициализированы нулевыми значениями
+	}
+
+	switch v := field.(type) {
+	case string:
+		fieldp.ValString = v
+		// Пытаемся преобразовать строку в числа
+		if s, err := strconv.ParseFloat(v, 64); err == nil {
+			fieldp.ValFloat = s
+		}
+		if s, err := strconv.ParseInt(v, 0, 64); err == nil {
+			fieldp.ValInt = s
 		}
 
-	} else {
-		fieldp.ValFloat = 0
+	case float64:
+		fieldp.ValFloat = v
+		fieldp.ValInt = int64(v)
+
+	case float32:
+		fieldp.ValFloat = float64(v)
+		fieldp.ValInt = int64(v)
+
+	case int:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int64:
+		fieldp.ValInt = v
+		fieldp.ValFloat = float64(v)
+
+	case int32:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int16:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int8:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint64:
+		// Осторожно с большими uint64 значениями при конвертации в int64
+		if v <= math.MaxInt64 {
+			fieldp.ValInt = int64(v)
+		}
+		fieldp.ValFloat = float64(v)
+
+	case uint32:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint16:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint8:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case bool:
+		fieldp.ValString = strconv.FormatBool(v)
+		if v {
+			fieldp.ValInt = 1
+			fieldp.ValFloat = 1.0
+		}
+
+	case json.Number:
+		fieldp.ValString = v.String()
+		if s, err := strconv.ParseFloat(fieldp.ValString, 64); err == nil {
+			fieldp.ValFloat = s
+		}
+		if s, err := strconv.ParseInt(fieldp.ValString, 0, 64); err == nil {
+			fieldp.ValInt = s
+		}
 	}
 
 	return fieldp
@@ -152,6 +215,6 @@ func (p *PrometheusResponse) JsonPrometheusFiledParseInt(field interface{}) int6
 }
 
 func (p *PrometheusResponse) JsonPrometheusFiledParseString(field interface{}) string {
-	fieldp := JsonINfluxFiledParse(field)
+	fieldp := p.JsonPrometheusFiledParse(field)
 	return fieldp.ValString
 }

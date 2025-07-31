@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/egorkovalchuk/go-ltreport/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
 
 //Устарело смотри InfluxJmeterScenario()
@@ -15,8 +15,8 @@ func InfluxJmeterScenarioOld() {
 
 	request := cfg.JmeterInflux + url.QueryEscape(cfg.JmeterQueryScenario+timeperiod_influx+cfg.JmeterQueryScnrGroup)
 
-	ProcessDebug("JmeterScenario")
-	ProcessDebug(request)
+	logs.ProcessDebug("JmeterScenario")
+	logs.ProcessDebug(request)
 
 	resp, err := http.Get(request)
 	if err != nil {
@@ -41,14 +41,14 @@ func InfluxJmeterScenarioOld() {
 		percen = reportdata.JsonINfluxFiledParseFloat(i.Values[0][1])
 		maxl = reportdata.JsonINfluxFiledParseFloat(i.Values[0][2])
 
-		ProcessDebug("Scenario " + i.Tags.Transaction)
-		ProcessDebug("percentile is " + strconv.Itoa(int(percen)) + " ms")
-		ProcessDebug("max latency " + strconv.Itoa(int(maxl)) + " ms")
+		logs.ProcessDebug("Scenario " + i.Tags.Transaction)
+		logs.ProcessDebug("percentile is " + strconv.Itoa(int(percen)) + " ms")
+		logs.ProcessDebug("max latency " + strconv.Itoa(int(maxl)) + " ms")
 
 		request_child := cfg.JmeterInflux + url.QueryEscape(`SELECT mean("count") / 5 FROM "details" WHERE "transaction" ='`+i.Tags.Transaction+`' AND "statut" = 'ok' AND time >= now() - 1d GROUP BY time(1d), "transaction" fill(null) ORDER BY time DESC`)
 
-		ProcessDebug("Load average request rate")
-		ProcessDebug(request_child)
+		logs.ProcessDebug("Load average request rate")
+		logs.ProcessDebug(request_child)
 
 		resp, err := http.Get(request_child)
 		if err != nil {
@@ -74,8 +74,8 @@ func InfluxJmeterScenarioOld() {
 		resp.Body.Close()
 
 		request_child = cfg.JmeterInflux + url.QueryEscape(`SELECT mean("count") / 5 FROM "details" WHERE "transaction" ='`+i.Tags.Transaction+`' AND "statut" = 'ko' AND time >= now() - 1d GROUP BY time(1d), "transaction" fill(null) ORDER BY time DESC`)
-		ProcessDebug("Load average request rate")
-		ProcessDebug(request_child)
+		logs.ProcessDebug("Load average request rate")
+		logs.ProcessDebug(request_child)
 
 		resp, err = http.Get(request_child)
 		if err != nil {

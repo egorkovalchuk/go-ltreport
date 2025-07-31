@@ -4,15 +4,15 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/egorkovalchuk/go-ltreport/confluence"
-	"github.com/egorkovalchuk/go-ltreport/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/confluence"
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
 
 // Power by  Egor Kovalchuk
@@ -66,17 +66,14 @@ var (
 func main() {
 
 	// start program
-	filer, err = os.OpenFile(logFileName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetOutput(filer)
-
 	//  запуск горутины записи в лог
-	go LogWriteForGoRutineStruct(LogChannel)
+	loggerOnce.Do(func() {
+		logs = logger.NewLogWriter(logFileName, debugm)
+		go logs.LogWriteForGoRutineStruct()
+	})
 
-	ProcessInfo("- - - - - - - - - - - - - - -")
-	ProcessInfo("Start report")
+	logs.ProcessInfo("- - - - - - - - - - - - - - -")
+	logs.ProcessInfo("Start report")
 
 	flag.BoolVar(&debugm, "d", false, "Start debug mode")
 	flag.BoolVar(&version, "v", false, "Version")
@@ -123,7 +120,7 @@ func main() {
 		return
 	}
 
-	ProcessDebug("Start with debug mode")
+	logs.ProcessDebug("Start with debug mode")
 	StartReport()
 	RemoveTemp()
 }
@@ -131,7 +128,7 @@ func main() {
 func StartReport() {
 
 	fmt.Println("Start report")
-	ProcessInfo("Report generation")
+	logs.ProcessInfo("Report generation")
 
 	ReportInit()
 
@@ -182,11 +179,11 @@ func StartReport() {
 	ReportEnd()
 
 	if cfg.ReportConfluenceOn {
-		ProcessInfo("Start load report on confluence")
+		logs.ProcessInfo("Start load report on confluence")
 		ReportDownload(reportfilename + ".pdf")
 	}
-	//ProcessDebug(Problems)
-	//ProcessDebug(LTGrafs)
+	//logs.ProcessDebug(Problems)
+	//logs.ProcessDebug(LTGrafs)
 }
 
 func ReportInflux() {
@@ -198,20 +195,20 @@ func ReportInflux() {
 	JMeterTestTh = make(map[string]map[string]reportdata.KeyField)
 
 	// Построение карты порогов
-	ProcessInfo("Load map threshold for tests ")
+	logs.ProcessInfo("Load map threshold for tests ")
 	for _, j := range cfg.JmeterQueryThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: ""})
-		ProcessDebug(j.Name + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
+		logs.ProcessDebug(j.Name + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
 	// Формирование стека ошибок
 	for _, ii := range LTTest_dinamic {
 
-		ProcessInfo("Load stack error for " + ii.NameTest)
+		logs.ProcessInfo("Load stack error for " + ii.NameTest)
 
 		// Есть ли пороги для данного теста
 		if val, ok := JMeterTestTh[ii.NameTest]; ok {
-			ProcessDebug(val)
+			logs.ProcessDebug(val)
 
 			for _, jj := range ii.Field {
 				// Берем имя поля с порогом
@@ -220,7 +217,7 @@ func ReportInflux() {
 				if valthershold, okk := JMeterTestTh[ii.NameTest][jj.Name]; okk {
 
 					if jj.Value > float64(valthershold.Value) {
-						ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value))}
 						Problems = append(Problems, p)
 
@@ -229,14 +226,14 @@ func ReportInflux() {
 			}
 		}
 		if val, ok := JMeterTestTh["*"]; ok {
-			ProcessDebug(val)
+			logs.ProcessDebug(val)
 			for _, jj := range ii.Field {
 				// Берем имя поля с порогом
 				// Проверяем, есть ли порог для теста ii.NameTest c полем jj.Name
 				// Если есть определяем порог
 				if valthershold, okk := JMeterTestTh["*"][jj.Name]; okk {
 					if jj.Value > float64(valthershold.Value) {
-						ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value))}
 						Problems = append(Problems, p)
 
@@ -251,19 +248,19 @@ func ReportInflux() {
 
 func InfluxErrorJmeter() {
 
-	ProcessInfo("Jmeter delta")
-	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", ProcessLog, debugm)
+	logs.ProcessInfo("Load Jmeter delta")
+	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", logs.ProcessLog, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.JmeterQuery + " " + timeperiod_influx + " " + cfg.JmeterQueryGroup))
 
 	if err != nil {
-		ProcessError("InfluxErrorJmeter error")
-		ProcessError(err)
+		logs.ProcessError("InfluxErrorJmeter error")
+		logs.ProcessError(err)
 		return
 	}
 
 	for _, i := range infjson.Results[0].Series {
 
-		ProcessInfo("Test " + i.Tags.Suite + " load")
+		logs.ProcessInfo("Test " + i.Tags.Suite + " load")
 
 		var LTTest_yfield []reportdata.YField
 		var LTTest_dinamictmp reportdata.LTTestDinamic
@@ -276,7 +273,7 @@ func InfluxErrorJmeter() {
 
 			LTTest_yfieldtmp.Name = j.Name
 			LTTest_yfieldtmp.Description = j.Description
-			LTTest_yfieldtmp.Value = reportdata.JsonINfluxFiledParseFloat(i.Values[0][num])
+			LTTest_yfieldtmp.Value = gc.JsonINfluxFiledParseFloat(i.Values[0][num])
 			num++
 			LTTest_yfield = append(LTTest_yfield, LTTest_yfieldtmp)
 		}
@@ -284,19 +281,19 @@ func InfluxErrorJmeter() {
 		LTTest_dinamictmp.Field = LTTest_yfield
 		LTTest_dinamic = append(LTTest_dinamic, LTTest_dinamictmp)
 
-		ProcessDebug(LTTest_dinamictmp)
+		logs.ProcessDebug(LTTest_dinamictmp)
 	}
 }
 
 func InfluxJmeterScenario() {
 
-	ProcessInfo("Jmeter Scenario")
-	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", ProcessLog, debugm)
+	logs.ProcessInfo("Jmeter Scenario")
+	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", logs.ProcessLog, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.JmeterQueryScenario + timeperiod_influx + cfg.JmeterQueryScnrGroup))
 
 	if err != nil {
-		ProcessError("InfluxJmeterScenario error")
-		ProcessError(err)
+		logs.ProcessError("InfluxJmeterScenario error")
+		logs.ProcessError(err)
 		return
 	}
 	var JMeterTestTh map[string]map[string]reportdata.KeyField
@@ -305,21 +302,21 @@ func InfluxJmeterScenario() {
 	LTScen_dimanict = make(map[string]map[string]reportdata.ScenarioDinamic)
 
 	// Построение карты порогов
-	ProcessInfo("Load map threshold for Scenario ")
+	logs.ProcessInfo("Load map threshold for Scenario ")
 	for _, j := range cfg.JmeterQueryScnrThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name+":"+j.NameThread, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: j.Statut})
-		ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
+		logs.ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
 	for _, i := range infjson.Results[0].Series {
 		if i.Tags.Statut != "" && i.Tags.Transaction != "all" {
 
-			ProcessDebug("Load scenario " + i.Tags.Application + ":" + i.Tags.Transaction + " for statut " + i.Tags.Statut)
+			logs.ProcessDebug("Load scenario " + i.Tags.Application + ":" + i.Tags.Transaction + " for statut " + i.Tags.Statut)
 			// можно так но все равно потом цикл в цикле :(
 			LTScenTmpt := LTScen_dimanict[i.Tags.Application][i.Tags.Transaction]
 			LTScenTmpt.SetApplication(i.Tags.Application)
 			LTScenTmpt.SetThread(i.Tags.Transaction)
-			LTScenTmpt.SeField(reportdata.InfluxJmeterScenarioStatut(i.Values, i.Tags.Statut, cfg.JmeterQueryScnrField))
+			LTScenTmpt.SeField(gc.InfluxJmeterScenarioStatut(i.Values, i.Tags.Statut, cfg.JmeterQueryScnrField))
 			LTScen_dimanict = reportdata.AddMapS(LTScen_dimanict, i.Tags.Application, i.Tags.Transaction, LTScenTmpt)
 		}
 
@@ -330,8 +327,8 @@ func InfluxJmeterScenario() {
 
 			// Есть ли пороги для данного теста
 			if val, ok := JMeterTestTh[ii.NameTest+":"+ii.NameThread]; ok {
-				ProcessDebug("Load stack error for " + ii.NameTest + ":" + ii.NameThread)
-				ProcessDebug(val)
+				logs.ProcessDebug("Load stack error for " + ii.NameTest + ":" + ii.NameThread)
+				logs.ProcessDebug(val)
 
 				for _, jj := range ii.Field {
 					// Берем имя поля с порогом
@@ -340,7 +337,7 @@ func InfluxJmeterScenario() {
 					if valthershold, okk := JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name]; okk {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
-							ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 							Problems = append(Problems, p)
 
@@ -358,7 +355,7 @@ func InfluxJmeterScenario() {
 					if valthershold, okk := JMeterTestTh["*:*"][jj.Name]; okk {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
-							ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 							Problems = append(Problems, p)
 
@@ -375,7 +372,7 @@ func InfluxJmeterScenario() {
 					if valthershold, okk := JMeterTestTh[ii.NameTest+":*"][jj.Name]; okk {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
-							ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
 							Problems = append(Problems, p)
 
@@ -390,22 +387,22 @@ func InfluxJmeterScenario() {
 
 func GrafanaReport() {
 
-	ProcessInfo("Load grafana metrics")
+	logs.ProcessInfo("Load grafana metrics")
 
 	var p reportdata.LTGrag
 	for _, i := range cfg.Grafanadash {
 
-		ProcessInfo("Load grafana " + i.Name)
+		logs.ProcessInfo("Load grafana " + i.Name)
 		request := i.Urlimg + timeperiod_grafana
-		ProcessDebug("Get image request " + request)
+		logs.ProcessDebug("Get image request " + request)
 
-		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, ProcessLog, debugm)
+		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, logs.ProcessLog, debugm)
 		ConType, err := gc.GetImage(i.Name)
 		defer gc.Close()
 
 		if err != nil {
-			ProcessError("Error generate image")
-			ProcessError(err)
+			logs.ProcessError("Error generate image")
+			logs.ProcessError(err)
 		}
 
 		p.Name = i.Name
@@ -423,20 +420,20 @@ func GrafanaReport() {
 		var percentile float64
 		if i.SourceType == 2 {
 			//  получение данные из прометеуса
-			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 			defer gcs.Close()
 		} else if i.SourceType == 3 {
-			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 			percentile, err = gh.Get99thPercentile(i.Query, timeperiodstart, timeperiodend)
 			defer gh.Close()
 		} else {
 			//  получение данные из инфлюкса
-			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 			defer gcs.Close()
 		}
-
+		logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
 		if percentile > float64(i.Threshold) && err == nil {
 			p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 			Problems = append(Problems, p)
@@ -446,17 +443,17 @@ func GrafanaReport() {
 }
 
 func GrafanaTemplateReport() {
-	ProcessInfo("Load grafana template metrics")
+	logs.ProcessInfo("Load grafana template metrics")
 
 	for _, i := range cfg.GrafanadashTemplate {
 		if i.FileList != "" {
 			f, err := os.Open(i.FileList)
 			if err != nil {
-				ProcessErrorAny("Unable to read input file "+i.FileList, err)
-				ProcessError("Thread " + i.Name + " not start")
+				logs.ProcessErrorAny("Unable to read input file "+i.FileList, err)
+				logs.ProcessError("Thread " + i.Name + " not start")
 			} else {
 				defer f.Close()
-				ProcessDebug("Start load " + i.FileList)
+				logs.ProcessDebug("Start load " + i.FileList)
 
 				// read csv values using csv.Reader
 				csvReader := csv.NewReader(f)
@@ -465,7 +462,7 @@ func GrafanaTemplateReport() {
 				csv, err := csvReader.ReadAll()
 
 				if err != nil {
-					ProcessError(err)
+					logs.ProcessError(err)
 					continue
 				}
 
@@ -476,8 +473,8 @@ func GrafanaTemplateReport() {
 
 				for j, line := range csv {
 					// Проверяем соответствие количества столбцов
-					if len(line) != len(headers) {
-						ProcessError(fmt.Errorf("Row %d: does not match the number of columns ", j+1))
+					if len(line) != colunmlen {
+						logs.ProcessError(fmt.Errorf("Row %d: does not match the number of columns ", j+1))
 						continue
 					}
 					record := make(reportdata.DinamicRecord, colunmlen)
@@ -498,31 +495,31 @@ func GrafanaTemplateReport() {
 					var percentile float64
 					if i.SourceType == 2 {
 						//  получение данные из прометеуса
-						gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+						gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 						defer gcs.Close()
 					} else if i.SourceType == 3 {
-						gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+						gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 						percentile, err = gh.Get99thPercentile(tmp_query, timeperiodstart, timeperiodend)
 						defer gh.Close()
 					} else {
 						//  получение данные из инфлюкса
-						gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, ProcessLog, debugm)
+						gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
 						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 						defer gcs.Close()
 					}
 					if percentile > float64(i.Threshold) && err == nil {
-						ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
+						logs.ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
 						p := reportdata.LTError{Name: "Grafana: " + tmp_name + " " + strings.Join(line, ", "), Threshold: i.Threshold, Description: i.ThDescription + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 						Problems = append(Problems, p)
 
-						gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, ProcessLog, debugm)
+						gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, logs.ProcessLog, debugm)
 						ConType, err := gc.GetImage(tmp_name)
 						defer gc.Close()
 
 						if err != nil {
-							ProcessError("Error generate image")
-							ProcessError(err)
+							logs.ProcessError("Error generate image")
+							logs.ProcessError(err)
 						} else {
 							var p reportdata.LTGrag
 							p.Name = tmp_name
@@ -534,26 +531,26 @@ func GrafanaTemplateReport() {
 							LTGrafs = append(LTGrafs, p)
 						}
 					} else if err != nil {
-						ProcessError(err)
+						logs.ProcessError(err)
 					}
 				}
 			}
 		} else {
-			ProcessInfo("Pool not defined for " + i.Name + " template dash")
+			logs.ProcessInfo("Pool not defined for " + i.Name + " template dash")
 		}
 	}
 }
 
 func ClickHouseReport() {
-	ProcessInfo("Start load ClickHouse")
+	logs.ProcessInfo("Start load ClickHouse")
 
-	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, ProcessLog, debugm)
+	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, logs.ProcessLog, debugm)
 	for _, i := range cfg.ClickHouse.Query {
 		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name, timeperiod_clickhouse)
 		if err == nil {
 			LTClickHouse = append(LTClickHouse, clkhouse)
 		} else {
-			ProcessError(err)
+			logs.ProcessError(err)
 		}
 	}
 	defer ch.Close()
@@ -564,13 +561,13 @@ func ReportIM() {
 
 		resp, err := client.Get("https:// "+cfg.FSMConnect+"/incidents?")
 
-		ProcessInfo(resp)
+		logs.ProcessInfo(resp)
 
 		if err != nil {
-			ProcessError(err)
+			logs.ProcessError(err)
 
 		}*/
-	ProcessInfo("Start report FSM")
+	logs.ProcessInfo("Start report FSM")
 
 }
 
@@ -585,23 +582,23 @@ func ReportDownload(reportfilename string) {
 	// перенеммные потом вынески в конфиг
 	confl, err := confluence.NewAPI(cfg.ReportConfluenceURL, cfg.ReportConfluenceLogin, cfg.ReportConfluencePass, cfg.ReportConfluenceToken, cfg.ReportConfluenceProxy)
 	if err != nil {
-		ProcessError("Error connection to confluence")
-		ProcessError(err)
+		logs.ProcessError("Error connection to confluence")
+		logs.ProcessError(err)
 		return
 	}
 	// Получение описание базовой страницы
-	ProcessDebug("GetContent")
-	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Expand: []string{"children.page"}}, ProcessLog)
+	logs.ProcessDebug("GetContent")
+	JsonCont, err := confl.GetContent(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Expand: []string{"children.page"}}, logs.ProcessLog)
 	if err != nil {
-		ProcessError(err)
-		ProcessError(JsonCont)
+		logs.ProcessError(err)
+		logs.ProcessError(JsonCont)
 		return
 	}
-	ProcessDebug("GetContentChildPage")
-	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Limit: 250, Expand: []string{"children.page"}}, ProcessLog)
+	logs.ProcessDebug("GetContentChildPage")
+	JsonConC, err := confl.GetContentChildPage(cfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.ReportConfluenceSpace, Limit: 250, Expand: []string{"children.page"}}, logs.ProcessLog)
 	if err != nil {
-		ProcessError(err)
-		ProcessError(JsonConC)
+		logs.ProcessError(err)
+		logs.ProcessError(JsonConC)
 		return
 	}
 
@@ -614,14 +611,14 @@ func ReportDownload(reportfilename string) {
 	for _, i := range JsonConC.Results {
 		if reportname == i.Title {
 			IdChild = i.ID
-			ProcessDebug(i.Title + ", id=" + IdChild)
+			logs.ProcessDebug(i.Title + ", id=" + IdChild)
 		} else {
 			IdChild = ""
 		}
 	}
 
 	if IdChild == "" {
-		ProcessDebug("Create child page " + reportname)
+		logs.ProcessDebug("Create child page " + reportname)
 		// формирование тела для создания
 		data := confluence.ConflCreateType{
 			Type:  "page",
@@ -645,34 +642,34 @@ func ReportDownload(reportfilename string) {
 			},
 		}
 
-		JsonContC, err := confl.CreateContent(&data, ProcessLog)
+		JsonContC, err := confl.CreateContent(&data, logs.ProcessLog)
 		if err != nil {
 
-			ProcessError(err)
+			logs.ProcessError(err)
 			return
 		}
 		IdChild = JsonContC.ID
 
 		file, err := os.OpenFile(reportfilename, os.O_RDONLY, 0666)
 		if err != nil {
-			ProcessError(err)
+			logs.ProcessError(err)
 		}
 
-		ProcessDebug("Upload current attachments " + reportfilename)
-		arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, ProcessLog)
+		logs.ProcessDebug("Upload current attachments " + reportfilename)
+		arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, logs.ProcessLog)
 		if err != nil {
-			ProcessError(err)
-			ProcessDebug(arsp)
+			logs.ProcessError(err)
+			logs.ProcessDebug(arsp)
 		}
 
 		defer file.Close()
 
 	} else {
-		ProcessDebug("Load current attachments")
-		arsp, err := confl.GetAttachments(IdChild, ProcessLog)
+		logs.ProcessDebug("Load current attachments")
+		arsp, err := confl.GetAttachments(IdChild, logs.ProcessLog)
 		if err != nil {
-			ProcessError(err)
-			ProcessDebug(arsp)
+			logs.ProcessError(err)
+			logs.ProcessDebug(arsp)
 		}
 
 		chck := false
@@ -686,22 +683,22 @@ func ReportDownload(reportfilename string) {
 
 		file, err := os.OpenFile(reportfilename, os.O_RDONLY, 0666)
 		if err != nil {
-			ProcessInfo(err)
+			logs.ProcessInfo(err)
 		}
 
 		if chck {
-			ProcessDebug("Update current attachments " + reportfilename)
-			arsp, err := confl.UpdateAttachment(IdChild, reportfilename, attachid, file, ProcessLog)
+			logs.ProcessDebug("Update current attachments " + reportfilename)
+			arsp, err := confl.UpdateAttachment(IdChild, reportfilename, attachid, file, logs.ProcessLog)
 			if err != nil {
-				ProcessInfo(err)
-				ProcessDebug(arsp)
+				logs.ProcessInfo(err)
+				logs.ProcessDebug(arsp)
 			}
 		} else {
-			ProcessDebug("Upload current attachments " + reportfilename)
-			arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, ProcessLog)
+			logs.ProcessDebug("Upload current attachments " + reportfilename)
+			arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, logs.ProcessLog)
 			if err != nil {
-				ProcessInfo(err)
-				ProcessDebug(arsp)
+				logs.ProcessInfo(err)
+				logs.ProcessDebug(arsp)
 			}
 		}
 

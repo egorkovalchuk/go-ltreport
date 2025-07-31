@@ -109,7 +109,7 @@ func (p *InfluxClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
 	metrics, err := p.GetDataMean(query)
 	if err == nil {
-		percentile = JsonINfluxFiledParseFloat(metrics.Results[0].Series[0].Values[0][1])
+		percentile = p.JsonINfluxFiledParseFloat(metrics.Results[0].Series[0].Values[0][1])
 		return percentile, nil
 	} else {
 		return 0, err
@@ -178,40 +178,101 @@ func (p *InfluxClient) Get99thPercentile(query string) (float64, error) {
 	return CalculatePercentile(values, 99), nil
 }
 
-func JsonINfluxFiledParse(field interface{}) SField {
+func (p *InfluxClient) JsonINfluxFiledParse(field interface{}) SField {
 	var fieldp SField
 
-	if field != nil {
-		if ff, ok := field.(string); ok {
-			fieldp.ValString = ff
-			if s, err := strconv.ParseFloat(ff, 64); err == nil {
-				fieldp.ValFloat = s
-			} else {
-				fieldp.ValFloat = 0
-			}
-			if s, err := strconv.ParseInt(ff, 0, 64); err == nil {
-				fieldp.ValInt = s
-			} else {
-				fieldp.ValInt = 0
-			}
-		} else {
-			fieldp.ValFloat = 0
+	if field == nil {
+		return fieldp
+	}
+	switch v := field.(type) {
+	case string:
+		fieldp.ValString = v
+		// Пытаемся преобразовать строку в числа
+		if s, err := strconv.ParseFloat(v, 64); err == nil {
+			fieldp.ValFloat = s
+		}
+		if s, err := strconv.ParseInt(v, 0, 64); err == nil {
+			fieldp.ValInt = s
 		}
 
-	} else {
-		fieldp.ValFloat = 0
+	case float64:
+		fieldp.ValFloat = v
+		fieldp.ValInt = int64(v)
+
+	case float32:
+		fieldp.ValFloat = float64(v)
+		fieldp.ValInt = int64(v)
+
+	case int:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int64:
+		fieldp.ValInt = v
+		fieldp.ValFloat = float64(v)
+
+	case int32:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int16:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case int8:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint64:
+		// Осторожно с большими uint64 значениями при конвертации в int64
+		if v <= math.MaxInt64 {
+			fieldp.ValInt = int64(v)
+		}
+		fieldp.ValFloat = float64(v)
+
+	case uint32:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint16:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case uint8:
+		fieldp.ValInt = int64(v)
+		fieldp.ValFloat = float64(v)
+
+	case bool:
+		fieldp.ValString = strconv.FormatBool(v)
+		if v {
+			fieldp.ValInt = 1
+			fieldp.ValFloat = 1.0
+		}
+
+	case json.Number:
+		fieldp.ValString = v.String()
+		if s, err := strconv.ParseFloat(fieldp.ValString, 64); err == nil {
+			fieldp.ValFloat = s
+		}
+		if s, err := strconv.ParseInt(fieldp.ValString, 0, 64); err == nil {
+			fieldp.ValInt = s
+		}
 	}
 
 	return fieldp
 }
 
-func JsonINfluxFiledParseFloat(field interface{}) float64 {
-	fieldp := JsonINfluxFiledParse(field)
+func (p *InfluxClient) JsonINfluxFiledParseFloat(field interface{}) float64 {
+	fieldp := p.JsonINfluxFiledParse(field)
 	return fieldp.ValFloat
 }
 
-func JsonINfluxFiledParseInt(field interface{}) int64 {
-	fieldp := JsonINfluxFiledParse(field)
+func (p *InfluxClient) JsonINfluxFiledParseInt(field interface{}) int64 {
+	fieldp := p.JsonINfluxFiledParse(field)
 	return fieldp.ValInt
 }
 
@@ -234,7 +295,7 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 	return infjson, nil
 }
 
-func InfluxJmeterScenarioStatut(i [][]interface{}, statut string, cfg []JmeterQScnrFieldS) []YField {
+func (p *InfluxClient) InfluxJmeterScenarioStatut(i [][]interface{}, statut string, cfg []JmeterQScnrFieldS) []YField {
 
 	var LTTest_yfield []YField
 	var LTTest_yfieldtmp YField
@@ -245,7 +306,7 @@ func InfluxJmeterScenarioStatut(i [][]interface{}, statut string, cfg []JmeterQS
 		LTTest_yfieldtmp.Name = j.Name
 		LTTest_yfieldtmp.Description = j.Description
 		LTTest_yfieldtmp.Statut = statut
-		LTTest_yfieldtmp.Value = JsonINfluxFiledParseFloat(i[0][num])
+		LTTest_yfieldtmp.Value = p.JsonINfluxFiledParseFloat(i[0][num])
 		num++
 		LTTest_yfield = append(LTTest_yfield, LTTest_yfieldtmp)
 	}
