@@ -115,6 +115,8 @@ func redefinitionconf() {
 		cfg.ClickHouse.Pass = CHPass
 	}
 
+	cfg.ReportPath = reportdata.EnsureTrailingSeparator(cfg.ReportPath)
+
 }
 
 func InitTime() {
@@ -144,7 +146,7 @@ func InitTime() {
 }
 
 func FindTimeWorkTest() (time.Time, time.Time) {
-	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", logs.ProcessLog, debugm)
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
 
 	timeperiod := ` time >= ` + fmt.Sprintf("%d", reportdata.BeginningOfDay().Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", reportdata.EndOfDay().Unix()) + `000ms `
 	infjson, err := gc.GetDataMean(url.QueryEscape("SELECT max(\"rate\") FROM \"delta\" WHERE" + " " + timeperiod + " " + "GROUP BY time(15m) fill(0)"))

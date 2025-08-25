@@ -12,6 +12,7 @@ import (
 
 	"github.com/egorkovalchuk/go-ltreport/internal/confluence"
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/notify"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
 
@@ -123,6 +124,11 @@ func main() {
 	logs.ProcessDebug("Start with debug mode")
 	StartReport()
 	RemoveTemp()
+	err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("01\\.02\\.2006 15:04:05"), cfg.ReportPath+reportfilename+".pdf")
+	if err != nil {
+		logs.ProcessError(err)
+	}
+	sleep(2)
 }
 
 func StartReport() {
@@ -196,7 +202,7 @@ func ReportInflux() {
 
 	// Построение карты порогов
 	logs.ProcessInfo("Load map threshold for tests ")
-	for _, j := range cfg.JmeterQueryThreshold {
+	for _, j := range cfg.Jmeter.JmeterQueryThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: ""})
 		logs.ProcessDebug(j.Name + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
@@ -249,8 +255,8 @@ func ReportInflux() {
 func InfluxErrorJmeter() {
 
 	logs.ProcessInfo("Load Jmeter delta")
-	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", logs.ProcessLog, debugm)
-	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.JmeterQuery + " " + timeperiod_influx + " " + cfg.JmeterQueryGroup))
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
+	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQuery + " " + timeperiod_influx + " " + cfg.Jmeter.JmeterQueryGroup))
 
 	if err != nil {
 		logs.ProcessError("InfluxErrorJmeter error")
@@ -269,7 +275,7 @@ func InfluxErrorJmeter() {
 		LTTest_dinamictmp.NameTest = i.Tags.Suite
 
 		num := 1
-		for _, j := range cfg.JmeterQueryField {
+		for _, j := range cfg.Jmeter.JmeterQueryField {
 
 			LTTest_yfieldtmp.Name = j.Name
 			LTTest_yfieldtmp.Description = j.Description
@@ -288,8 +294,8 @@ func InfluxErrorJmeter() {
 func InfluxJmeterScenario() {
 
 	logs.ProcessInfo("Jmeter Scenario")
-	gc := reportdata.NewInfluxClient(cfg.JmeterInflux, "", logs.ProcessLog, debugm)
-	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.JmeterQueryScenario + timeperiod_influx + cfg.JmeterQueryScnrGroup))
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
+	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQueryScenario + timeperiod_influx + cfg.Jmeter.JmeterQueryScnrGroup))
 
 	if err != nil {
 		logs.ProcessError("InfluxJmeterScenario error")
@@ -303,7 +309,7 @@ func InfluxJmeterScenario() {
 
 	// Построение карты порогов
 	logs.ProcessInfo("Load map threshold for Scenario ")
-	for _, j := range cfg.JmeterQueryScnrThreshold {
+	for _, j := range cfg.Jmeter.JmeterQueryScnrThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name+":"+j.NameThread, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: j.Statut})
 		logs.ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
@@ -316,7 +322,7 @@ func InfluxJmeterScenario() {
 			LTScenTmpt := LTScen_dimanict[i.Tags.Application][i.Tags.Transaction]
 			LTScenTmpt.SetApplication(i.Tags.Application)
 			LTScenTmpt.SetThread(i.Tags.Transaction)
-			LTScenTmpt.SeField(gc.InfluxJmeterScenarioStatut(i.Values, i.Tags.Statut, cfg.JmeterQueryScnrField))
+			LTScenTmpt.SeField(gc.InfluxJmeterScenarioStatut(i.Values, i.Tags.Statut, cfg.Jmeter.JmeterQueryScnrField))
 			LTScen_dimanict = reportdata.AddMapS(LTScen_dimanict, i.Tags.Application, i.Tags.Transaction, LTScenTmpt)
 		}
 
@@ -571,7 +577,7 @@ func ReportIM() {
 
 }
 
-//  Загрузка в джиру
+// Загрузка в джиру
 func ReportDownload(reportfilename string) {
 	// пробрасываем дебаг
 	confluence.DebugFlag = debugm
@@ -650,7 +656,7 @@ func ReportDownload(reportfilename string) {
 		}
 		IdChild = JsonContC.ID
 
-		file, err := os.OpenFile(reportfilename, os.O_RDONLY, 0666)
+		file, err := os.OpenFile(cfg.ReportPath+reportfilename, os.O_RDONLY, 0666)
 		if err != nil {
 			logs.ProcessError(err)
 		}
@@ -681,7 +687,7 @@ func ReportDownload(reportfilename string) {
 			}
 		}
 
-		file, err := os.OpenFile(reportfilename, os.O_RDONLY, 0666)
+		file, err := os.OpenFile(cfg.ReportPath+reportfilename, os.O_RDONLY, 0666)
 		if err != nil {
 			logs.ProcessInfo(err)
 		}
@@ -709,6 +715,8 @@ func ReportDownload(reportfilename string) {
 }
 
 func RemoveTemp() {
+
+	logs.ProcessInfo("Remove temp files")
 
 	directory, _ := os.Getwd()
 	readDirectory, _ := os.Open(directory)

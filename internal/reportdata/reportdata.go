@@ -5,23 +5,27 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
 // Config configuration stucture
 type Config struct {
-	//Имя файла
+	// Имя файла
 	ReportFilename string `json:"ReportFilename"`
-	//Маска даты
+	// Маска даты
 	ReportMask string `json:"ReportMask"`
-	//Включение выкладнки на конфлюенс
+	// Путь к отчету
+	ReportPath string `json:"ReportPath"`
+	// Включение выкладнки на конфлюенс
 	ReportConfluenceOn bool `json:"ReportConfluenceOn"`
-	//Адрес конфлюенса
+	// Адрес конфлюенса
 	ReportConfluenceURL string `json:"ReportConfluenceURL"`
-	//Ид куда пишем данные
+	// Ид куда пишем данные
 	ReportConfluenceId string `json:"ReportConfluenceId"`
-	//Спейс конфлюенса
+	// Спейс конфлюенса
 	ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
 	ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
 	ReportConfluencePass  string `json:"ReportConfluencePass"`
@@ -59,49 +63,51 @@ type Config struct {
 		ReportDash       bool `json:"ReportDash"`
 		ReportClickHouse bool `json:"ClickHouse"`
 	} `json:"ReportOn"`
-	JmeterLoginInflux string `json:"JmeterLoginInflux"`
-	JmeterPassinflux  string `json:"JmeterPassInflux"`
-	//Подключение к инфлюксу jmeter
-	JmeterInflux string `json:"JmeterInflux"`
-	//запрос
-	JmeterQuery string `json:"JmeterQuery"`
-	//группировка
-	JmeterQueryGroup string `json:"JmeterQueryGroup"`
-	//Описание полей
-	JmeterQueryField []struct {
-		//имя поля
-		Name string `json:"Name"`
-		//Описание
-		Description string `json:"Description"`
-	} `json:"JmeterQueryField"`
-	//Тестовые сценари с порогами по ошибкам
-	JmeterQueryThreshold []struct {
-		//имя сценария
-		Name string `json:"Name"`
-		//Поле по которому смотрим пороги
-		ErrorField string `json:"ErrorField"`
-		//порог
-		Threshold int `json:"Threshold"`
-		//Описание порога
-		Description string `json:"Description"`
-	} `json:"JmeterQueryThreshold"`
-	JmeterQueryScenario      string              `json:"JmeterQueryScenario"`
-	JmeterQueryScnrGroup     string              `json:"JmeterQueryScnrGroup"`
-	JmeterQueryScnrField     []JmeterQScnrFieldS `json:"JmeterQueryScnrField"`
-	JmeterQueryScnrThreshold []struct {
-		//имя сценария
-		Name string `json:"Name"`
-		//имя нити
-		NameThread string `json:"NameThread"`
-		//Поле по которому смотрим порогиN
-		ErrorField string `json:"ErrorField"`
-		//Статус на Jmeter
-		Statut string `json:"Statut"`
-		//порог
-		Threshold int `json:"Threshold"`
-		//Описание порога
-		Description string `json:"Description"`
-	} `json:"JmeterQueryScnrThreshold"`
+	Jmeter struct {
+		JmeterLoginInflux string `json:"JmeterLoginInflux"`
+		JmeterPassinflux  string `json:"JmeterPassInflux"`
+		//Подключение к инфлюксу jmeter
+		JmeterInflux string `json:"JmeterInflux"`
+		//запрос
+		JmeterQuery string `json:"JmeterQuery"`
+		//группировка
+		JmeterQueryGroup string `json:"JmeterQueryGroup"`
+		//Описание полей
+		JmeterQueryField []struct {
+			//имя поля
+			Name string `json:"Name"`
+			//Описание
+			Description string `json:"Description"`
+		} `json:"JmeterQueryField"`
+		//Тестовые сценари с порогами по ошибкам
+		JmeterQueryThreshold []struct {
+			//имя сценария
+			Name string `json:"Name"`
+			//Поле по которому смотрим пороги
+			ErrorField string `json:"ErrorField"`
+			//порог
+			Threshold int `json:"Threshold"`
+			//Описание порога
+			Description string `json:"Description"`
+		} `json:"JmeterQueryThreshold"`
+		JmeterQueryScenario      string              `json:"JmeterQueryScenario"`
+		JmeterQueryScnrGroup     string              `json:"JmeterQueryScnrGroup"`
+		JmeterQueryScnrField     []JmeterQScnrFieldS `json:"JmeterQueryScnrField"`
+		JmeterQueryScnrThreshold []struct {
+			//имя сценария
+			Name string `json:"Name"`
+			//имя нити
+			NameThread string `json:"NameThread"`
+			//Поле по которому смотрим порогиN
+			ErrorField string `json:"ErrorField"`
+			//Статус на Jmeter
+			Statut string `json:"Statut"`
+			//порог
+			Threshold int `json:"Threshold"`
+			//Описание порога
+			Description string `json:"Description"`
+		} `json:"JmeterQueryScnrThreshold"`
+	} `json:"Jmeter"`
 	Grafanadash []struct {
 		Name string `json:"Name"`
 		// авторизация на графане
@@ -171,8 +177,8 @@ type JmeterQScnrFieldS struct {
 	Description string `json:"Description"`
 }
 
-//для хранения ключей и создания карты по порогам и их описания
-//для сценариев, отличие в статусе сценария (Statut)
+// для хранения ключей и создания карты по порогам и их описания
+// для сценариев, отличие в статусе сценария (Statut)
 type KeyField struct {
 	//порог
 	Value int
@@ -182,7 +188,7 @@ type KeyField struct {
 	Statut string
 }
 
-//сруктура ошибок для анализа
+// сруктура ошибок для анализа
 type LTError struct {
 	Name        string
 	Threshold   int
@@ -190,8 +196,8 @@ type LTError struct {
 	Type        string
 }
 
-//Структура сценария
-//Устарело, смотри ScenarioDinamic
+// Структура сценария
+// Устарело, смотри ScenarioDinamic
 type Scenario struct {
 	Tags       string
 	Percentile float64
@@ -200,14 +206,14 @@ type Scenario struct {
 	RateError  float64
 }
 
-//Структура с сценариев динамическим запросом
+// Структура с сценариев динамическим запросом
 type ScenarioDinamic struct {
 	NameTest   string
 	NameThread string
 	Field      []YField
 }
 
-//сруктура для вывода графиков
+// сруктура для вывода графиков
 type LTGrag struct {
 	Name        string
 	Threshold   int
@@ -269,7 +275,7 @@ func AddMapS(m map[string]map[string]ScenarioDinamic, TestName, NameThread strin
 	return m
 }
 
-//Методы для типа ScenarioDinamic
+// Методы для типа ScenarioDinamic
 func (p *ScenarioDinamic) SetApplication(NameTest string) {
 	p.NameTest = NameTest
 }
@@ -384,4 +390,33 @@ func CalculatePercentile(values []float64, percentile float64) float64 {
 	i := int(index)
 	fraction := index - float64(i)
 	return values[i] + fraction*(values[i+1]-values[i])
+}
+
+// HasTrailingSeparator проверяет наличие разделителя в конце пути
+func HasTrailingSeparator(path string) bool {
+	if path == "" {
+		return false
+	}
+	return strings.HasSuffix(path, string(filepath.Separator)) ||
+		strings.HasSuffix(path, "/") // для URL и универсальности
+}
+
+// EnsureTrailingSeparator добавляет разделитель в конце пути
+func EnsureTrailingSeparator(path string) string {
+	if path == "" {
+		return string(filepath.Separator)
+	}
+	if !HasTrailingSeparator(path) {
+		return path + string(filepath.Separator)
+	}
+	return path
+}
+
+// RemoveTrailingSeparator удаляет разделитель в конце пути
+func RemoveTrailingSeparator(path string) string {
+	if HasTrailingSeparator(path) {
+		// Удаляем все trailing separators
+		return strings.TrimRight(path, string(filepath.Separator)+"/")
+	}
+	return path
 }

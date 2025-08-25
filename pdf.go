@@ -29,7 +29,7 @@ func ReportEnd() {
 	// сжатие
 	pdf.SetCompression(true)
 	// запись отчета
-	err := pdf.OutputFileAndClose(reportfilename + ".pdf")
+	err := pdf.OutputFileAndClose(cfg.ReportPath + reportfilename + ".pdf")
 	if err != nil {
 		logs.ProcessError(err)
 	}

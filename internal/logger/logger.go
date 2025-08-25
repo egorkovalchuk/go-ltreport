@@ -14,8 +14,8 @@ type LogStruct struct {
 
 type LogWriter struct {
 	logger      *log.Logger
-	filer       *os.File
 	LogChannel  chan LogStruct
+	filer       *os.File
 	logFileName string
 	debugm      bool
 }
@@ -31,12 +31,13 @@ func NewLogWriter(logFileName string, debugm bool) *LogWriter {
 // Запись ошибок из горутин
 // можно добавить ротейт по дате + архив в отдельном потоке
 func (l *LogWriter) LogWriteForGoRutineStruct() {
-	filer, err := os.OpenFile(l.logFileName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+	var err error
+	l.filer, err = os.OpenFile(l.logFileName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer filer.Close()
-	l.logger = log.New(filer, "", 0)
+	defer l.filer.Close()
+	l.logger = log.New(l.filer, "", 0)
 
 	for entry := range l.LogChannel {
 		prefix := time.Now().Local().Format("2006/01/02 15:04:05") + " " + entry.t + ": "
