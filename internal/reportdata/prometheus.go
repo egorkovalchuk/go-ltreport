@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 )
 
 type PrometheusResponse struct {
@@ -28,12 +30,12 @@ type PrometheusClient struct {
 	baseURL string
 	auth    string
 	client  *http.Client
-	logFunc func(string, interface{})
+	logFunc *logger.LogWriter
 	debug   bool
 }
 
 // NewPrometheusClient создает новый экземпляр клиента
-func NewPrometheusClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *PrometheusClient {
+func NewPrometheusClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *PrometheusClient {
 	return &PrometheusClient{
 		baseURL: baseURL,
 		auth:    auth,
@@ -45,12 +47,6 @@ func NewPrometheusClient(baseURL string, auth string, logFunc func(string, inter
 
 func (p *PrometheusClient) Close() {
 	p.client.CloseIdleConnections()
-}
-
-func (p *PrometheusClient) ProcessDebug(t interface{}) {
-	if p.debug {
-		p.logFunc("DEBUG", t)
-	}
 }
 
 func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error) {
@@ -67,7 +63,7 @@ func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		p.logFunc("INFO", "Request prometheus threshold success")
+		p.logFunc.ProcessInfo("Request prometheus threshold success")
 		var prom PrometheusResponse
 		err = prom.JsonPrometheusParse(resp)
 		if err != nil {
@@ -82,7 +78,7 @@ func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error)
 
 func (p *PrometheusClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
-	p.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
+	p.logFunc.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
 	prom, err := p.GetDataMean(query)
 	if err == nil {
 		percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])

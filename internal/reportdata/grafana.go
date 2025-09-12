@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 )
 
 // GrafanaClient представляет клиент для работы с Grafana
@@ -15,12 +17,12 @@ type GrafanaClient struct {
 	baseURL string
 	auth    string
 	client  *http.Client
-	logFunc func(string, interface{})
+	logFunc *logger.LogWriter
 	debug   bool
 }
 
 // NewGrafanaClient создает новый экземпляр клиента
-func NewGrafanaClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *GrafanaClient {
+func NewGrafanaClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *GrafanaClient {
 	return &GrafanaClient{
 		baseURL: baseURL,
 		auth:    auth,
@@ -32,12 +34,6 @@ func NewGrafanaClient(baseURL string, auth string, logFunc func(string, interfac
 
 func (p *GrafanaClient) Close() {
 	p.client.CloseIdleConnections()
-}
-
-func (p *GrafanaClient) ProcessDebug(t interface{}) {
-	if p.debug {
-		p.logFunc("DEBUG", t)
-	}
 }
 
 func (p *GrafanaClient) GetImage(Name string) (string, error) {
@@ -58,7 +54,7 @@ func (p *GrafanaClient) GetImage(Name string) (string, error) {
 
 	//  проверяем получение картинки, статус 200
 	if rsp.StatusCode == http.StatusOK {
-		p.logFunc("INFO", "Request image success")
+		p.logFunc.ProcessInfo("Request image success")
 
 		var n io.Reader
 		// io.Copy(ioutil.Discard, rsp.Body)

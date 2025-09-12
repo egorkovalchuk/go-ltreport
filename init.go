@@ -146,7 +146,7 @@ func InitTime() {
 }
 
 func FindTimeWorkTest() (time.Time, time.Time) {
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
 
 	timeperiod := ` time >= ` + fmt.Sprintf("%d", reportdata.BeginningOfDay().Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", reportdata.EndOfDay().Unix()) + `000ms `
 	infjson, err := gc.GetDataMean(url.QueryEscape("SELECT max(\"rate\") FROM \"delta\" WHERE" + " " + timeperiod + " " + "GROUP BY time(15m) fill(0)"))

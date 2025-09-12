@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 )
 
 var (
@@ -16,7 +18,7 @@ var (
 	err       error
 )
 
-//структура influx type 1
+// структура influx type 1
 type Mean struct {
 	Results []struct {
 		StatementID int `json:"statement_id"`
@@ -34,7 +36,7 @@ type Mean struct {
 	} `json:"results"`
 }
 
-//структура influx type 2 для сценария
+// структура influx type 2 для сценария
 type MeanScenario struct {
 	Results []struct {
 		StatementID int `json:"statement_id"`
@@ -52,7 +54,7 @@ type MeanScenario struct {
 	} `json:"results"`
 }
 
-//для преобразования типа ответа инфлюкса
+// для преобразования типа ответа инфлюкса
 type SField struct {
 	NameCol   string
 	ValFloat  float64
@@ -61,13 +63,13 @@ type SField struct {
 	ValTime   int64
 }
 
-//Структруа ответа инфлюкса по тестам
+// Структруа ответа инфлюкса по тестам
 type LTTestDinamic struct {
 	NameTest string
 	Field    []YField
 }
 
-//для хранения поля ответа
+// для хранения поля ответа
 type YField struct {
 	Name        string
 	Value       float64
@@ -80,12 +82,12 @@ type InfluxClient struct {
 	baseURL string
 	auth    string
 	client  *http.Client
-	logFunc func(string, interface{})
+	logFunc *logger.LogWriter
 	debug   bool
 }
 
 // NewPrometheusClient создает новый экземпляр клиента
-func NewInfluxClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *InfluxClient {
+func NewInfluxClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *InfluxClient {
 	return &InfluxClient{
 		baseURL: baseURL,
 		auth:    auth,
@@ -97,12 +99,6 @@ func NewInfluxClient(baseURL string, auth string, logFunc func(string, interface
 
 func (p *InfluxClient) Close() {
 	p.client.CloseIdleConnections()
-}
-
-func (p *InfluxClient) ProcessDebug(t interface{}) {
-	if p.debug {
-		p.logFunc("DEBUG", t)
-	}
 }
 
 func (p *InfluxClient) GetThreshold(query string) (float64, error) {
@@ -124,7 +120,7 @@ func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 	if p.auth != "" {
 		resp_inf.Header.Add("Authorization", p.auth)
 	}
-	p.logFunc("INFO", "Influx request "+p.baseURL+""+query)
+	p.logFunc.ProcessInfo("Influx request " + p.baseURL + "" + query)
 
 	rsp_inf, err := p.client.Do(resp_inf)
 	if err != nil {
@@ -133,7 +129,7 @@ func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 	defer rsp_inf.Body.Close()
 
 	if rsp_inf.StatusCode == http.StatusOK {
-		p.logFunc("INFO", "Request Influx success")
+		p.logFunc.ProcessInfo("Request Influx success")
 		infjson, err := JsonINfluxParse(rsp_inf)
 		if err == nil {
 			return infjson, nil

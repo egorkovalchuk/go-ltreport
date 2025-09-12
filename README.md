@@ -56,13 +56,13 @@ Reports are automatically created as child pages in Confluence with attached PDF
 ## **Examples**  
 ``` bash
 # Стандартный отчет за день
-./ltreport -c config.json
+./ltreport -config config.json
 
 # Отчет за произвольный период
 ./ltreport -start "2023.12.31 09:00" -end "2023.12.31 18:00"
 
 # Режим отладки
-./ltreport -d -c custom_config.json
+./ltreport -d -config custom_config.json
 ```
 ---
 

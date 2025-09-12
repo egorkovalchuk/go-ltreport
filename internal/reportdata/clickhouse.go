@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 )
 
 // Result of Query.
@@ -39,12 +41,12 @@ type CHClient struct {
 	user    string
 	pass    string
 	client  *http.Client
-	logFunc func(string, interface{})
+	logFunc *logger.LogWriter
 	debug   bool
 }
 
 // NewCHClient создает новый экземпляр клиента
-func NewCHClient(baseURL string, user string, pass string, logFunc func(string, interface{}), debug bool) *CHClient {
+func NewCHClient(baseURL string, user string, pass string, logFunc *logger.LogWriter, debug bool) *CHClient {
 	return &CHClient{
 		baseURL: baseURL,
 		user:    user,
@@ -61,7 +63,7 @@ func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod str
 	if err != nil {
 		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %v", err)
 	}
-	p.ProcessDebug(strings.Replace(sql, "{timestamp}", timeperiod, 1) + " FORMAT JSONStrings")
+	p.logFunc.ProcessDebug(strings.Replace(sql, "{timestamp}", timeperiod, 1) + " FORMAT JSONStrings")
 
 	resp.SetBasicAuth(p.user, p.pass)
 	resp.Header.Add("Content-Type", "application/json")
@@ -72,21 +74,21 @@ func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod str
 
 	rsp, err := p.client.Do(resp)
 	if err != nil {
-		p.logFunc("ERROR", fmt.Errorf("GetSql request failed: %v", err))
+		p.logFunc.ProcessError(fmt.Errorf("GetSql request failed: %v", err))
 		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %v", err)
 	}
 
 	if rsp.StatusCode == http.StatusOK {
-		p.logFunc("INFO", "Query ClickHouse succes ")
+		p.logFunc.ProcessInfo("Query ClickHouse succes ")
 	} else {
-		p.logFunc("ERROR", fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
+		p.logFunc.ProcessError(fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
 		return ClickHouseJson{}, fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode)
 	}
 
 	var clkhouse ClickHouseJson
 	err = clkhouse.JsonClickHouseParse(rsp, name)
 	if err != nil {
-		p.logFunc("ERROR", fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err))
+		p.logFunc.ProcessError(fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err))
 		return ClickHouseJson{}, fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err)
 	}
 
@@ -97,12 +99,6 @@ func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod str
 
 func (p *CHClient) Close() {
 	p.client.CloseIdleConnections()
-}
-
-func (p *CHClient) ProcessDebug(t interface{}) {
-	if p.debug {
-		p.logFunc("DEBUG", t)
-	}
 }
 
 func (p *ClickHouseJson) JsonClickHouseParse(resp *http.Response, name string) error {

@@ -1,6 +1,7 @@
 {
 	"ReportFilename": "LTReport",
 	"ReportMask":      "02012006",
+	"ReportPath": "/tmp",
 	//Загрузка отчета на конфлюенс
 	"ReportConfluenceOn": true,
 	//Адрес конфлюенса
@@ -12,12 +13,11 @@
 	//авторизация по токену
 	"ReportConfluenceToken":"token",
 	"ReportConfluenceProxy":"",
+	"ReportAllure":true,
 	//Настройки для FSM
 	ReportIM" :{
-		"User" : "",
-		"Pass": "",
 		"Token" : "",
-		"Type": 1,    "LoginFSM" :     "string",
+		"LoginFSM" :     "string",
 		"PassFSM" :   	 "string",
 		"FSMConnect": 	 "fsm.ru",
 		"FSMTU":      	 "string"
@@ -48,40 +48,42 @@
 			"ReportDash": true,
 			"ClickHouse": false
 			},
-	"JmeterInflux" :   "http://10.10.10.1:8086",
-	"LoginInflux" :   "",
-	"PassInflux" :    "",
-	"JmeterQuery":    "SELECT mean(\"rate\"), mean(\"avg\"), mean(\"errpct\"), percentile(\"avg\", 95), max(\"avg\"), percentile(\"avg\", 50) FROM \"delta\" WHERE ",
-	"JmeterQueryGroup": "GROUP BY \"suite\", time(1d) fill(0)",
-	//Описание столбцов
-	"JmeterQueryField": [
-			{"Name": "Rate", "Description": "Averagate rate %d ops"},
-			{"Name": "Avg", "Description":"Average latency %d ms"},
-			{"Name": "ErrorPercent", "Description":"Error %d %%" },
-			{"Name": "Percentile", "Description":"Percentile latency %d ms" },
-			{"Name": "Maxlatency", "Description":"Max latency %d ms" },
-			{"Name": "Percentile50", "Description":"Percentile 50 %d ms" }
-		],
-	// Тестовые сценари пер тест с порогами
-	"JmeterQueryThreshold":     [
-			{"Name":"oapi-get", "ErrorField":"ErrorPercent", "Threshold": 3, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"oapi-get", "ErrorField":"Maxlatency", "Threshold": 400, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"cam", "ErrorField":"ErrorPercent","Threshold": 50, "Description": "The error is higher %d in test %s current %d"}, 
-			{"Name":"oapi-set", "ErrorField":"ErrorPercent","Threshold": 40, "Description": "The error is higher %d in test %s current %d"}
-	],
-	"JmeterQueryScenario": "SELECT max(\"pct90.0\"), max(\"max\"), mean(\"count\") FROM \"details\" WHERE ",
-	"JmeterQueryScnrGroup": " GROUP BY time(1d), \"application\", \"transaction\", \"statut\" fill(0) ORDER BY time DESC",
-	"JmeterQueryScnrField": [
-			{"Name": "Percentile90", "Description": "Percentile90 latency %d ms"},
-			{"Name": "Maxlatency", "Description":"Max latency %d ms"},
-			{"Name": "Rate", "Description":"Averagate rate %d ops"}
-		],
-	"JmeterQueryScnrThreshold":     [
-			{"Name":"oapi_get","NameThread":"getToken", "ErrorField":"Percentile90", "Threshold": 5, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"}, 
-			{"Name":"oapi_get","NameThread":"*", "ErrorField":"Percentile90", "Threshold": 100, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"}, 
-			{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Percentile90", "Threshold": 20, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"},
-			{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Rate", "Threshold": 10, "Statut":"ko", "Description": "The rate count is higher %d ops in scenario %s current %d ops"}
-		],
+	"Jmeter": {
+			"JmeterInflux" :   "http://10.10.10.1:8086",
+			"LoginInflux" :   "",
+			"PassInflux" :    "",
+			"JmeterQuery":    "SELECT mean(\"rate\"), mean(\"avg\"), mean(\"errpct\"), percentile(\"avg\", 95), max(\"avg\"), percentile(\"avg\", 50) FROM \"delta\" WHERE ",
+			"JmeterQueryGroup": "GROUP BY \"suite\", time(1d) fill(0)",
+			//Описание столбцов
+			"JmeterQueryField": [
+					{"Name": "Rate", "Description": "Averagate rate %d ops"},
+					{"Name": "Avg", "Description":"Average latency %d ms"},
+					{"Name": "ErrorPercent", "Description":"Error %d %%" },
+					{"Name": "Percentile", "Description":"Percentile latency %d ms" },
+					{"Name": "Maxlatency", "Description":"Max latency %d ms" },
+					{"Name": "Percentile50", "Description":"Percentile 50 %d ms" }
+				],
+			// Тестовые сценари пер тест с порогами
+			"JmeterQueryThreshold":     [
+					{"Name":"oapi-get", "ErrorField":"ErrorPercent", "Threshold": 3, "Description": "The error is higher %d in test %s current %d"}, 
+					{"Name":"oapi-get", "ErrorField":"Maxlatency", "Threshold": 400, "Description": "The error is higher %d in test %s current %d"}, 
+					{"Name":"cam", "ErrorField":"ErrorPercent","Threshold": 50, "Description": "The error is higher %d in test %s current %d"}, 
+					{"Name":"oapi-set", "ErrorField":"ErrorPercent","Threshold": 40, "Description": "The error is higher %d in test %s current %d"}
+			],
+			"JmeterQueryScenario": "SELECT max(\"pct90.0\"), max(\"max\"), mean(\"count\") FROM \"details\" WHERE ",
+			"JmeterQueryScnrGroup": " GROUP BY time(1d), \"application\", \"transaction\", \"statut\" fill(0) ORDER BY time DESC",
+			"JmeterQueryScnrField": [
+					{"Name": "Percentile90", "Description": "Percentile90 latency %d ms"},
+					{"Name": "Maxlatency", "Description":"Max latency %d ms"},
+					{"Name": "Rate", "Description":"Averagate rate %d ops"}
+				],
+			"JmeterQueryScnrThreshold":     [
+					{"Name":"oapi_get","NameThread":"getToken", "ErrorField":"Percentile90", "Threshold": 5, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"}, 
+					{"Name":"oapi_get","NameThread":"*", "ErrorField":"Percentile90", "Threshold": 100, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"}, 
+					{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Percentile90", "Threshold": 20, "Statut":"ok", "Description": "The high latency %d ms in scenario %s current %d ms"},
+					{"Name":"oapi_get","NameThread":"getTokenForSCC", "ErrorField":"Rate", "Threshold": 10, "Statut":"ko", "Description": "The rate count is higher %d ops in scenario %s current %d ops"}
+				]
+	},
 	"GrafanaDash":
 		[
 			{"Name":     "ESB CPU",

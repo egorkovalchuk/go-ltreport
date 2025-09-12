@@ -15,7 +15,7 @@ var (
 	reportfilename string
 )
 
-func ReportInit() {
+func ReportPDFInit() {
 
 	logs.ProcessInfo("File name " + reportfilename)
 	// Инициализация pdf
@@ -112,13 +112,12 @@ func ReportInfluxScrnPDF() {
 		pdf.CellFormat(195, 7, k, "0", 0, "CM", false, 0, "")
 
 		for _, i := range LTScen_dimanict[k] {
-			//pdf.SetY(pdf.GetY() + 6)
 			pdf.SetFont("Times", "B", 6)
 			pdf.CellFormat(195, 7, i.NameTest+":"+i.NameThread, "0", 0, "CM", false, 0, "")
 			pdf.SetY(pdf.GetY() + 6)
 
 			scenariopdf := make(map[string][]reportdata.YField)
-			//Для красивого вывода в отчет
+			// Для красивого вывода в отчет
 			for _, ii := range i.Field {
 				scenariopdf[ii.Statut] = append(scenariopdf[ii.Statut], ii)
 			}
@@ -245,7 +244,7 @@ func ClickHouseReportPDF() {
 	pdf.CellFormat(195, 7, "Report ClickHouse", "0", 0, "CM", false, 0, "")
 	saveX, saveY = pdf.GetXY()
 
-	//добавить вычисление длины для таблиц
+	// добавить вычисление длины для таблиц
 
 	for _, i := range LTClickHouse {
 
@@ -301,4 +300,104 @@ func ClickHouseReportPDF() {
 		}
 		saveX, saveY = pdf.GetXY()
 	}
+}
+
+func ReportIMPDF() {
+	logs.ProcessDebug("Start generate pdf - FSM")
+	var saveX, saveY float64
+	saveX = 6
+	saveY = 10
+
+	pdf.AddPage()
+	pdf.SetY(pdf.GetY() + 6)
+	pdf.SetFont("Times", "B", 16)
+	pdf.CellFormat(195, 7, "Report FSM", "0", 0, "CM", false, 0, "")
+	saveX, saveY = pdf.GetXY()
+
+	ln := pdf.PointConvert(6)
+
+	// Цвета для таблицы
+	headerFillColor := [3]int{200, 200, 200} // серый для заголовков
+	rowFillColor := [3]int{240, 240, 240}    // светлый серый для четных строк
+
+	// Ширина колонок (сумма = 190 для A4 формата с полями)
+	colWidth := []float64{15, 45, 80, 50} // number, avrName, briefDescription, description
+
+	// Заголовки колонок
+	headers := []string{"Number", "Brief Description", "Description", "AVR Name"}
+	pdf.SetXY(saveX, saveY)
+	pdf.SetY(pdf.GetY() + 8)
+
+	pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+	pdf.SetFont("Times", "B", 10)
+	pdf.SetTextColor(0, 0, 0)
+
+	for i, header := range headers {
+		pdf.CellFormat(colWidth[i], 5, header, "1", 0, "C", true, 0, "")
+	}
+
+	for i, item := range LTIM.Content {
+		// Чередование цвета фона для строк
+		pdf.Ln(-1)
+		pdf.SetFont("Times", "", 5)
+
+		fill := i%2 == 1
+		if fill {
+			pdf.SetFillColor(rowFillColor[0], rowFillColor[1], rowFillColor[2])
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		// Получаем данные для строки
+		rowData := []string{item.Number, item.BriefDescription, item.Description, item.AvrName}
+
+		// Рассчитываем максимальную высоту для строки
+		maxLines := 1
+		for j, text := range rowData {
+			lines := pdf.SplitLines([]byte(text), colWidth[j]-2)
+			if len(lines) > maxLines {
+				maxLines = len(lines)
+			}
+
+		}
+
+		saveX, saveY = pdf.GetXY()
+		rowHeight := float64(maxLines-1) * 5
+
+		pdf.MultiCell(colWidth[0], 5, item.Number, "T", "C", fill)
+
+		pdf.SetXY(saveX+colWidth[0], saveY)
+		pdf.MultiCell(colWidth[1], 5, item.BriefDescription, "T", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1], saveY)
+		pdf.MultiCell(colWidth[2], 5, item.Description, "T", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1]+colWidth[2], saveY)
+		pdf.MultiCell(colWidth[3], 5, item.AvrName, "T", "L", fill)
+
+		// Переходим к следующей строке
+		pdf.SetXY(saveX, saveY+rowHeight)
+
+		// Проверяем, не нужно ли добавить новую страницу
+		if pdf.GetY()+float64(25)+ln > a4height || saveY+25+ln > a4height {
+			pdf.AddPage()
+			saveY = 10
+			saveX = 6
+			// Повторяем заголовки на новой странице
+			pdf.SetFont("Times", "", 5)
+			pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+			for i, header := range headers {
+				pdf.CellFormat(colWidth[i], 7, header, "1", 0, "C", true, 0, "")
+			}
+		}
+	}
+
+}
+
+func sum(arr []float64) float64 {
+	total := 0.0
+	for _, v := range arr {
+		total += v
+	}
+	return total
 }

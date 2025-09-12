@@ -7,6 +7,8 @@ import (
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 )
 
 // Datapoint представляет одну точку данных Graphite
@@ -26,12 +28,12 @@ type GraphiteClient struct {
 	baseURL string
 	client  *http.Client
 	auth    string
-	logFunc func(string, interface{})
+	logFunc *logger.LogWriter
 	debug   bool
 }
 
 // NewGraphiteClient создает новый экземпляр клиента
-func NewGraphiteClient(baseURL string, auth string, logFunc func(string, interface{}), debug bool) *GraphiteClient {
+func NewGraphiteClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *GraphiteClient {
 	return &GraphiteClient{
 		baseURL: baseURL,
 		auth:    auth,
@@ -45,12 +47,6 @@ func (gc *GraphiteClient) Close() {
 	gc.client.CloseIdleConnections()
 }
 
-func (gc *GraphiteClient) ProcessDebug(t interface{}) {
-	if gc.debug {
-		gc.logFunc("DEBUG", t)
-	}
-}
-
 // GetMetrics получает метрики из Graphite API
 func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]MetricResponse, error) {
 
@@ -58,7 +54,7 @@ func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]Me
 	//gc.ProcessDebug(requestURL)
 	rsp, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		gc.ProcessDebug("Get Graphite threshold request: " + requestURL)
+		gc.logFunc.ProcessDebug("Get Graphite threshold request: " + requestURL)
 		return nil, fmt.Errorf("request failed: %v", err)
 	}
 	rsp.Header.Add("Authorization", gc.auth)
@@ -72,7 +68,7 @@ func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]Me
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		gc.ProcessDebug("Get Graphite threshold request: " + requestURL)
+		gc.logFunc.ProcessDebug("Get Graphite threshold request: " + requestURL)
 		return nil, fmt.Errorf("graphite API returned status %d: %s", resp.StatusCode, string(body))
 	}
 

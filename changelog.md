@@ -18,3 +18,11 @@ Add Remove png-files
 Add Graphana template 
 Add Graphite-api
 ## Fix
+# 0.4.0.1
+## Features
+Add notifier function
+## Fix
+# 0.5.0.0
+## Features
+Add allure report
+## Fix

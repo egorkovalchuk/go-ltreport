@@ -91,7 +91,7 @@ func (confl *API) GetContent(id string, param ContentQuery, f func(level string,
 }
 
 func (confl *API) GetContentChildPage(id string, param ContentQuery, f func(level string, logtext interface{})) (*ConflTypeA, error) {
-	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/page")
+	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/page?limit=1000")
 
 	if err != nil {
 		return nil, errors.New("Url generation error")
@@ -136,7 +136,7 @@ func (confl *API) GetJson(content []byte, f func(level string, logtext interface
 
 }
 
-//Создание новой страницы
+// Создание новой страницы
 func (confl *API) CreateContent(data *ConflCreateType, f func(level string, logtext interface{})) (*ConflType, error) {
 
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/")

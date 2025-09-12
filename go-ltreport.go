@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egorkovalchuk/go-ltreport/internal/allure"
 	"github.com/egorkovalchuk/go-ltreport/internal/confluence"
+	"github.com/egorkovalchuk/go-ltreport/internal/hpsm"
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 	"github.com/egorkovalchuk/go-ltreport/internal/notify"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
@@ -21,28 +23,27 @@ const (
 	//  логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.4.0.0"
+	versionutil  = "0.5.0.0"
 	a4height     = 297
 	a4width      = 210
 )
 
 var (
 	// Configuration
-	cfg reportdata.Config
+	cfg       reportdata.Config
+	bannotify bool
 	// режим работы сервиса(дебаг мод)
 	debugm bool
-	// Запись в лог
-	filer *os.File
 	// запрос помощи
 	help bool
 	// по часовой отчет за прошедший час
 	hour bool
 	//  Delete temp files
 	rmtmpfile bool
-	// ошибки
-	err error
 	// запрос версии
 	version bool
+	// ошибки
+	err error
 	// Переменная для тестов
 	LTTest_dinamic []reportdata.LTTestDinamic
 	// Переменная для анализа
@@ -59,6 +60,8 @@ var (
 	StartDateStr string
 	EndDate      time.Time
 	StartDate    time.Time
+	// Аварии
+	LTIM hpsm.Content
 
 	// Массив для ClickHouse
 	LTClickHouse []reportdata.ClickHouseJson
@@ -79,16 +82,17 @@ func main() {
 	flag.BoolVar(&debugm, "d", false, "Start debug mode")
 	flag.BoolVar(&version, "v", false, "Version")
 	var confname string
-	flag.StringVar(&confname, "c", confFileName, "start with users config")
+	flag.StringVar(&confname, "config", confFileName, "start with users config")
 	flag.StringVar(&LoginFSM, "fsmlogin", "", "HP Service Manager Login")
 	flag.StringVar(&PassFSM, "fsmpass", "", "HP Service Manager Password")
 	flag.StringVar(&ConflProxy, "conflproxy", "", "Confluence proxy, use http://user:password@url:port ")
 	flag.StringVar(&ConfToken, "ConfToken", "", "Confluence Token ")
-	flag.StringVar(&CHUser, "CH User", "", "ClichHouse User")
-	flag.StringVar(&CHPass, "CH Password", "", "ClichHouse password")
+	flag.StringVar(&CHUser, "CHUser", "", "ClichHouse User")
+	flag.StringVar(&CHPass, "CHPassword", "", "ClichHouse password")
 	flag.BoolVar(&help, "h", false, "Use -h for help")
 	flag.BoolVar(&hour, "hour", false, "Generate by hourly report")
 	flag.BoolVar(&rmtmpfile, "rm", false, "Remove temp files")
+	flag.BoolVar(&bannotify, "ban", false, "Ban sending notifications")
 	flag.StringVar(&StartDateStr, "start", "", "Start date of report generation in format 2006.01.31 15:00")
 	flag.StringVar(&EndDateStr, "end", "", "End date of report generation in format 2006.01.31 15:00")
 	flag.Parse()
@@ -96,6 +100,8 @@ func main() {
 	readconf(&cfg, confname)
 	//  Замена на приоритетный конфиг из командной строки
 	redefinitionconf()
+
+	logs.ChangeDebugLevel(debugm)
 
 	if cfg.ReportConfluenceOn && cfg.ReportConfluenceURL == "" {
 		fmt.Printf("Confluence URL is required when ReportConfluenceOn=true")
@@ -124,9 +130,11 @@ func main() {
 	logs.ProcessDebug("Start with debug mode")
 	StartReport()
 	RemoveTemp()
-	err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("01\\.02\\.2006 15:04:05"), cfg.ReportPath+reportfilename+".pdf")
-	if err != nil {
-		logs.ProcessError(err)
+	if !bannotify {
+		err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("01\\.02\\.2006 15:04:05"), cfg.ReportPath+reportfilename+".pdf")
+		if err != nil {
+			logs.ProcessError(err)
+		}
 	}
 	sleep(2)
 }
@@ -136,7 +144,7 @@ func StartReport() {
 	fmt.Println("Start report")
 	logs.ProcessInfo("Report generation")
 
-	ReportInit()
+	ReportPDFInit()
 
 	// Получение инцидентов
 	if cfg.ReportOn.ReportIM {
@@ -175,6 +183,9 @@ func StartReport() {
 		ClickHouseReportPDF()
 	}
 
+	if cfg.ReportOn.ReportIM {
+		ReportIMPDF()
+	}
 	// Прогрузка общенй информации
 	if cfg.ReportOn.ReportJmeter {
 		ReportInfluxPDF()
@@ -255,7 +266,7 @@ func ReportInflux() {
 func InfluxErrorJmeter() {
 
 	logs.ProcessInfo("Load Jmeter delta")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQuery + " " + timeperiod_influx + " " + cfg.Jmeter.JmeterQueryGroup))
 
 	if err != nil {
@@ -294,7 +305,7 @@ func InfluxErrorJmeter() {
 func InfluxJmeterScenario() {
 
 	logs.ProcessInfo("Jmeter Scenario")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs.ProcessLog, debugm)
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQueryScenario + timeperiod_influx + cfg.Jmeter.JmeterQueryScnrGroup))
 
 	if err != nil {
@@ -394,6 +405,7 @@ func InfluxJmeterScenario() {
 func GrafanaReport() {
 
 	logs.ProcessInfo("Load grafana metrics")
+	alluretmp := allure.NewAllure(cfg.ReportAllure, logs)
 
 	var p reportdata.LTGrag
 	for _, i := range cfg.Grafanadash {
@@ -402,7 +414,7 @@ func GrafanaReport() {
 		request := i.Urlimg + timeperiod_grafana
 		logs.ProcessDebug("Get image request " + request)
 
-		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, logs.ProcessLog, debugm)
+		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, logs, debugm)
 		ConType, err := gc.GetImage(i.Name)
 		defer gc.Close()
 
@@ -426,23 +438,27 @@ func GrafanaReport() {
 		var percentile float64
 		if i.SourceType == 2 {
 			//  получение данные из прометеуса
-			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 			defer gcs.Close()
 		} else if i.SourceType == 3 {
-			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 			percentile, err = gh.Get99thPercentile(i.Query, timeperiodstart, timeperiodend)
 			defer gh.Close()
 		} else {
 			//  получение данные из инфлюкса
-			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 			defer gcs.Close()
 		}
 		logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
 		if percentile > float64(i.Threshold) && err == nil {
-			p := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
-			Problems = append(Problems, p)
+			ltp := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
+			Problems = append(Problems, ltp)
+
+			alluretmp.CreateAllureReport(i.ThDescription, i.Name, fmt.Sprintf("%s[%s start %d]", i.ThDescription, i.Name, timeperiodstart.UnixMilli()), "failed", "finished", timeperiodstart.UnixMilli(), timeperiodend.UnixMilli(), []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}}, []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}}, []allure.AllureLink{{Name: "Grafana", URL: p.UrlDash, Type: "requirement"}})
+		} else {
+			alluretmp.CreateAllureReport(i.ThDescription, i.Name, fmt.Sprintf("%s[%s start %d]", i.ThDescription, i.Name, timeperiodstart.UnixMilli()), "passed", "finished", timeperiodstart.UnixMilli(), timeperiodend.UnixMilli(), []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}}, []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}}, []allure.AllureLink{{Name: "Grafana", URL: p.UrlDash, Type: "requirement"}})
 		}
 	}
 	GrafanaTemplateReport()
@@ -450,6 +466,7 @@ func GrafanaReport() {
 
 func GrafanaTemplateReport() {
 	logs.ProcessInfo("Load grafana template metrics")
+	alluretmp := allure.NewAllure(cfg.ReportAllure, logs)
 
 	for _, i := range cfg.GrafanadashTemplate {
 		if i.FileList != "" {
@@ -501,16 +518,16 @@ func GrafanaTemplateReport() {
 					var percentile float64
 					if i.SourceType == 2 {
 						//  получение данные из прометеуса
-						gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+						gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
 						defer gcs.Close()
 					} else if i.SourceType == 3 {
-						gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+						gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 						percentile, err = gh.Get99thPercentile(tmp_query, timeperiodstart, timeperiodend)
 						defer gh.Close()
 					} else {
 						//  получение данные из инфлюкса
-						gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs.ProcessLog, debugm)
+						gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs, debugm)
 						percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
 						defer gcs.Close()
 					}
@@ -519,7 +536,7 @@ func GrafanaTemplateReport() {
 						p := reportdata.LTError{Name: "Grafana: " + tmp_name + " " + strings.Join(line, ", "), Threshold: i.Threshold, Description: i.ThDescription + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
 						Problems = append(Problems, p)
 
-						gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, logs.ProcessLog, debugm)
+						gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, logs, debugm)
 						ConType, err := gc.GetImage(tmp_name)
 						defer gc.Close()
 
@@ -536,8 +553,13 @@ func GrafanaTemplateReport() {
 							p.UrlDash = tmp_dash + timeperiod_grafana
 							LTGrafs = append(LTGrafs, p)
 						}
+						alluretmp.CreateAllureReport(i.ThDescription, tmp_name, fmt.Sprintf("%s[%s start %d]", i.ThDescription, tmp_name, timeperiodstart.UnixMilli()), "failed", "finished", timeperiodstart.UnixMilli(), timeperiodend.UnixMilli(), []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}}, []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}}, []allure.AllureLink{{Name: "Grafana", URL: tmp_dash + timeperiod_grafana, Type: "requirement"}})
+
 					} else if err != nil {
 						logs.ProcessError(err)
+						alluretmp.CreateAllureReport(i.ThDescription, tmp_name, fmt.Sprintf("%s[%s start %d]", i.ThDescription, tmp_name, timeperiodstart.UnixMilli()), "failed", "finished", timeperiodstart.UnixMilli(), timeperiodend.UnixMilli(), []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}}, nil, nil)
+					} else {
+						alluretmp.CreateAllureReport(i.ThDescription, tmp_name, fmt.Sprintf("%s[%s start %d]", i.ThDescription, tmp_name, timeperiodstart.UnixMilli()), "passed", "finished", timeperiodstart.UnixMilli(), timeperiodend.UnixMilli(), []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}}, []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}}, []allure.AllureLink{{Name: "Grafana", URL: tmp_dash + timeperiod_grafana, Type: "requirement"}})
 					}
 				}
 			}
@@ -550,7 +572,7 @@ func GrafanaTemplateReport() {
 func ClickHouseReport() {
 	logs.ProcessInfo("Start load ClickHouse")
 
-	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, logs.ProcessLog, debugm)
+	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, logs, debugm)
 	for _, i := range cfg.ClickHouse.Query {
 		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name, timeperiod_clickhouse)
 		if err == nil {
@@ -563,18 +585,9 @@ func ClickHouseReport() {
 }
 
 func ReportIM() {
-	/*	client := &http.Client{}
-
-		resp, err := client.Get("https:// "+cfg.FSMConnect+"/incidents?")
-
-		logs.ProcessInfo(resp)
-
-		if err != nil {
-			logs.ProcessError(err)
-
-		}*/
 	logs.ProcessInfo("Start report FSM")
-
+	fsm := hpsm.NewFSM(cfg.ReportIM.Fsmconnect+cfg.ReportIM.Fsmtu, cfg.ReportIM.Token, cfg.ReportIM.LoginFSM, cfg.ReportIM.PassFSM, logs)
+	LTIM = fsm.GetIM()
 }
 
 // Загрузка в джиру

@@ -31,11 +31,9 @@ type Config struct {
 	ReportConfluencePass  string `json:"ReportConfluencePass"`
 	ReportConfluenceToken string `json:"ReportConfluenceToken"`
 	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
+	ReportAllure          bool   `json:"ReportAllure"`
 	ReportIM              struct {
-		User       string `json:"User"`
-		Pass       string `json:"Pass"`
 		Token      string `json:"Token"`
-		Type       int    `json:"Type"`
 		LoginFSM   string `json:"LoginFSM"`
 		PassFSM    string `json:"PassFSM"`
 		Fsmconnect string `json:"FSMConnect"`
@@ -292,7 +290,7 @@ func (p *ScenarioDinamic) SeField(YF []YField) {
 func Helpstart() {
 	fmt.Println("Use -v get version")
 	fmt.Println("Use -d start with debug mode")
-	fmt.Println("Use -c start with users config")
+	fmt.Println("Use -config start with users config")
 	fmt.Println("Use -hour to generate an hourly report ")
 	fmt.Println("Use -fsmlogin start with Login FSM")
 	fmt.Println("Use -fsmpass start with Password FSM")
