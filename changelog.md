@@ -25,4 +25,7 @@ Add notifier function
 # 0.5.0.0
 ## Features
 Add allure report
+Add gorutine
+Add api HPSM(local custom) 
 ## Fix
+Checked directory

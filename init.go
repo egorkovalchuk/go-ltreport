@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 
 	"os"
@@ -24,6 +25,11 @@ var (
 	timeperiod_grafana    string
 	timeperiodstart       time.Time
 	timeperiodend         time.Time
+	// Пользовательский период формировани
+	EndDateStr   string
+	StartDateStr string
+	EndDate      time.Time
+	StartDate    time.Time
 	// FSM connect
 	LoginFSM string
 	PassFSM  string
@@ -103,11 +109,11 @@ func redefinitionconf() {
 
 	// Замена переменных Proxy
 	if ConflProxy != "" {
-		cfg.ReportConfluenceProxy = ConflProxy
+		cfg.Confluence.ReportConfluenceProxy = ConflProxy
 	}
 
 	if ConfToken != "" {
-		cfg.ReportConfluenceToken = ConfToken
+		cfg.Confluence.ReportConfluenceToken = ConfToken
 	}
 
 	if CHUser != "" && CHPass != "" {
@@ -192,4 +198,59 @@ func FindTimeWorkTest() (time.Time, time.Time) {
 		logs.ProcessDebug("Time period " + time.Unix(min/1000, 0).Format("02.01.2006 15:04:05") + "-" + time.Unix(max/1000, 0).Format("02.01.2006 15:04:05"))
 	}
 	return time.Unix(min/1000, 0), time.Unix(max/1000, 0)
+}
+
+func RemoveTemp() {
+
+	logs.ProcessInfo("Remove temp files")
+
+	directory, err := os.Getwd()
+	if err != nil {
+		logs.ProcessError(err)
+		return
+	}
+	logs.ProcessDebug(directory)
+	readDirectory, err := os.Open(directory + "/tmp/")
+	if err != nil {
+		logs.ProcessError(err)
+		return
+	}
+	allFiles, err := readDirectory.Readdir(0)
+	if err != nil {
+		logs.ProcessError(err)
+		return
+	}
+
+	for f := range allFiles {
+		file := allFiles[f]
+		fileName := file.Name()
+		if strings.HasSuffix(fileName, ".png") {
+			os.Remove(fileName)
+		}
+	}
+}
+
+func createOutputDir(path string) {
+	isExists, err := existsDir(path)
+	if err != nil {
+		logs.ProcessError("Error create temp directory")
+	}
+
+	if !isExists {
+		_ = os.MkdirAll(path, os.ModePerm)
+	}
+
+}
+
+func existsDir(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	return false, err
 }

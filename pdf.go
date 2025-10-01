@@ -182,7 +182,7 @@ func GrafanaReportPDF() {
 	for _, i := range LTGrafs {
 
 		//сохранение переменных для второго и послед рисунков
-		file, err := os.Open(i.Name + ".png")
+		file, err := os.Open("tmp/" + i.Name + ".png")
 		if err != nil {
 			logs.ProcessError(err)
 			continue

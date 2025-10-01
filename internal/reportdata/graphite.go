@@ -141,7 +141,7 @@ func (gc *GraphiteClient) Get99thPercentile(target string, from, until time.Time
 	}
 
 	if len(metrics) == 0 {
-		return 0, fmt.Errorf("no metrics found for target %s", target)
+		return 0, fmt.Errorf("No metrics found for target %s", target)
 	}
 
 	// Собираем все значения
@@ -153,7 +153,7 @@ func (gc *GraphiteClient) Get99thPercentile(target string, from, until time.Time
 	}
 
 	if len(values) == 0 {
-		return 0, fmt.Errorf("no valid data points found")
+		return 0, fmt.Errorf("No valid data points found for target: %s", target)
 	}
 
 	// Вычисляем 99-й персентиль

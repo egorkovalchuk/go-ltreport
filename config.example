@@ -3,17 +3,24 @@
 	"ReportMask":      "02012006",
 	"ReportPath": "/tmp",
 	//Загрузка отчета на конфлюенс
-	"ReportConfluenceOn": true,
-	//Адрес конфлюенса
-	"ReportConfluenceURL":"https://confluence.com/",
-	"ReportConfluenceId":"926291954",
-	"ReportConfluenceSpace":"space",
-	"ReportConfluenceLogin":"login",
-    "ReportConfluencePass":"pass",
-	//авторизация по токену
-	"ReportConfluenceToken":"token",
-	"ReportConfluenceProxy":"",
-	"ReportAllure":true,
+	"Confluence":{
+		"ReportConfluenceOn": true,
+		//Адрес конфлюенса
+		"ReportConfluenceURL":"https://confluence.com/",
+		"ReportConfluenceId":"926291954",
+		"ReportConfluenceSpace":"space",
+		"ReportConfluenceLogin":"login",
+		"ReportConfluencePass":"pass",
+		//авторизация по токену
+		"ReportConfluenceToken":"token",
+		"ReportConfluenceProxy":""
+	},
+	"Allure": {
+		"ReportAllure":true,,
+		"ReportEndPoint":"https://allure.ru",
+		"Token":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",   
+		"ReportPath":"allure-results/"
+	},
 	//Настройки для FSM
 	ReportIM" :{
 		"Token" : "",
@@ -107,6 +114,7 @@
              "Threshold": 90,
              // Описание порога
 			 "ThDescription": "CPU jopa",
+			 "Tag": "Product",
              // размер картинки в pdf
              "Size": {"Width": 120, "Height": 50}
 			}
@@ -138,6 +146,7 @@
              "Size": {"Width": 120, "Height": 50},
 			 // Добавлять график только при срабатывании порога
 			 "ThresholdFilter": true,
+			 "Tag": "Product",
 			 // Имя Файла и шаблон
 			 "FileList": "1.csv",
 			 "FilePettern": "server;name"

@@ -1,104 +1,53 @@
 package allure
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
+	"time"
 
-	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 	"github.com/google/uuid"
 )
 
 type Allure struct {
-	on      bool
-	logFunc *logger.LogWriter
+	on         bool
+	e          chan *LogStruct
+	token      string
+	userToken  string
+	BaseURL    string
+	ProjectID  int
+	HTTPClient *http.Client
+	path       string
+	testcount  int
 }
 
-type AllureResult struct {
-	UUID        string             `json:"uuid"`
-	Name        string             `json:"name"`
-	FullName    string             `json:"fullName"`
-	HistoryID   string             `json:"historyId"`
-	Status      string             `json:"status"`
-	Stage       string             `json:"stage"`
-	Start       int64              `json:"start"`
-	Stop        int64              `json:"stop"`
-	Steps       []AllureStep       `json:"steps"`
-	Labels      []AllureLabel      `json:"labels"`
-	Links       []AllureLink       `json:"links"`
-	Attachments []AllureAttachment `json:"attachments"`
-	Parameters  []AllureParameter  `json:"parameters"`
-	Description string             `json:"description,omitempty"`
-}
-
-type AllureStep struct {
-	Name        string             `json:"name"`
-	Status      string             `json:"status"`
-	Start       int64              `json:"start"`
-	Stop        int64              `json:"stop"`
-	Steps       []AllureStep       `json:"steps"`
-	Attachments []AllureAttachment `json:"attachments"`
-	Parameters  []AllureParameter  `json:"parameters"`
-}
-
-// AllureParameter - структура параметра
-type AllureParameter struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type AllureAttachment struct {
-	Name    string `json:"name"`
-	Source  string `json:"source"`            // UUID названия файла
-	Type    string `json:"type"`              // MIME type
-	Content string `json:"content,omitempty"` // base64 encoded content
-}
-
-type AllureLabel struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type AllureLink struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-	Type string `json:"type"`
-}
-
-func NewAllure(on bool, logFunc *logger.LogWriter) *Allure {
+func NewAllure(on bool, userToken, BaseURL, path string) *Allure {
 	return &Allure{
-		on:      on,
-		logFunc: logFunc,
+		on:        on,
+		userToken: userToken,
+		BaseURL:   BaseURL,
+		ProjectID: 367,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		path:      EnsureTrailingSeparator(path),
+		e:         make(chan *LogStruct),
+		testcount: 0,
 	}
 }
 
-func (a *Allure) CreateAllureReport(name, fullname, historyID, status, stage string, start, stop int64, labels []AllureLabel, parameters []AllureParameter, links []AllureLink) {
+func (a *Allure) CreateAllureReport(tmp AllureResult) {
 	if !a.on {
 		return
 	}
-	testUUID := uuid.New().String()
-	result := AllureResult{
-		UUID:      testUUID,
-		Name:      name,
-		FullName:  fullname,
-		HistoryID: historyID,
-		Status:    status,
-		Stage:     stage,
-		Start:     start,
-		Stop:      stop,
-		Links:     links,
-		Steps: []AllureStep{
-			{
-				Name:   "Checked parameter",
-				Status: "passed",
-				Start:  start,
-				Stop:   stop,
-			},
-		},
-		Labels:     labels,
-		Parameters: parameters,
-	}
-
+	result := tmp
 	// Сохраняем в файл
 	a.saveAllureResult(result)
 }
@@ -117,38 +66,16 @@ func (a *Allure) saveAllureResult(result AllureResult) {
 
 	file, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		a.logFunc.ProcessError("Error create allure json " + err.Error())
+		a.ProcessError("Error create allure json " + err.Error())
+		return
 	}
 	a.createOutputDir()
-	err = os.WriteFile("allure-results/"+result.UUID+"-result.json", file, 0644)
+	err = os.WriteFile(a.path+result.UUID+"-result.json", file, 0644)
 	if err != nil {
-		a.logFunc.ProcessError("Error create allure json " + err.Error())
+		a.ProcessError("Error create allure json " + err.Error())
+		return
 	}
-}
-
-func (a *Allure) createOutputDir() {
-	isExists, err := a.exists("allure-results")
-	if err != nil {
-		a.logFunc.ProcessError("Error create allure json " + err.Error())
-	}
-
-	if !isExists {
-		_ = os.MkdirAll("allure-results", os.ModePerm)
-	}
-
-}
-
-func (a *Allure) exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-
-	return false, err
+	a.testcount++
 }
 
 func (a *Allure) saveAllureAttachments(result AllureResult) {
@@ -169,13 +96,208 @@ func (a *Allure) saveAttachmentFile(attachment AllureAttachment) {
 	// Декодируем base64 контент
 	content, err := base64.StdEncoding.DecodeString(attachment.Content)
 	if err != nil {
-		a.logFunc.ProcessError("Error create allure json " + err.Error())
+		a.ProcessError("Error create allure json " + err.Error())
 	}
 	a.createOutputDir()
 	// Сохраняем файл с правильным именем (как в Source)
-	err = os.WriteFile("allure-results/"+attachment.Source, content, 0644)
+	err = os.WriteFile(a.path+attachment.Source, content, 0644)
 	if err != nil {
-		a.logFunc.ProcessError("Error create allure json " + err.Error())
+		a.ProcessError("Error create allure json " + err.Error())
 	}
 
+}
+
+func (a *Allure) Finish(zipFileName string, start, end time.Time, url string) error {
+	if !a.on {
+		return nil
+	}
+	a.createZip(zipFileName)
+	a.deleteFiles()
+
+	err := a.GetToken()
+	if err != nil {
+		a.ProcessError("Error get token")
+		a.ProcessError(err)
+		return err
+	}
+
+	id, err := a.CreateLaunch(start, end, url)
+	if err != nil {
+		a.ProcessError("Error create launch")
+		a.ProcessError(err)
+		return err
+	}
+
+	a.ProcessDebug("Launch id: " + fmt.Sprint(id))
+
+	err = a.UploadArchive(zipFileName, id)
+
+	return err
+}
+
+func (a *Allure) UploadArchive(zipFileName string, id int) error {
+
+	filePath := a.path + zipFileName
+	// Проверяем существование файла
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return fmt.Errorf("File not exists: %s", filePath)
+	}
+
+	// Открываем файл
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("Cannot open file: %v", err)
+	}
+	defer file.Close()
+
+	// Создаем multipart form
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	contentType := a.getContentType(filePath)
+	filename := filepath.Base(filePath)
+
+	// Создаем часть с явным указанием Content-Type
+	part, err := writer.CreatePart(map[string][]string{
+		"Content-Type":        {contentType},
+		"Content-Disposition": {fmt.Sprintf(`form-data; name="archive"; filename="%s"`, filename)},
+	})
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("Cannot copy error file: %v", err)
+	}
+
+	// Создаем часть для JSON данных
+	jsonPart, err := writer.CreatePart(map[string][]string{
+		"Content-Type":        {"application/json"},
+		"Content-Disposition": {`form-data; name="info"`},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = jsonPart.Write([]byte("{}"))
+	if err != nil {
+		return err
+	}
+
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("Error Close writer: %v", err)
+	}
+
+	// Создаем запрос
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/rs/launch/%d/upload", a.BaseURL, id), body)
+	if err != nil {
+		return fmt.Errorf("Error creating query: %v", err)
+	}
+
+	// Устанавливаем заголовки
+	req.Header.Set("accept", "*/*")
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", a.token)
+
+	// Выполняем запрос
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("Error query execute: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Проверяем статус
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("HTTP error: %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	// Читаем успешный ответ
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Error read response: %v", err)
+	}
+
+	var uploadResp UploadResponse
+	err = json.Unmarshal(responseBody, &uploadResp)
+	if err != nil {
+		return err
+	}
+	a.ProcessDebug("Load files count: " + fmt.Sprint(uploadResp.FilesCount))
+
+	exitcount := 0
+	for {
+		cnt, err := a.LaunchStat(id)
+		if err != nil {
+			a.ProcessError(err)
+			exitcount++
+		} else if cnt >= a.testcount {
+			err = a.CloseLaunch(id)
+			if err != nil {
+				a.ProcessError("Error close launch")
+				a.ProcessError(err)
+				return err
+			}
+			break
+		} else if exitcount >= 5 {
+			a.ProcessError("Error process files, close manualy launch")
+			break
+		} else {
+			a.ProcessInfo(fmt.Sprintf("%d tests out of %d processed", cnt, a.testcount))
+			a.ProcessInfo("Waiting process files")
+			exitcount++
+		}
+		<-time.Tick(2 * time.Second)
+	}
+
+	return nil
+}
+
+func (a *Allure) GetToken() error {
+	a.ProcessDebug("Get Allure jwt token")
+
+	// Подготавливаем данные формы
+	formData := url.Values{}
+	formData.Set("grant_type", "apitoken")
+	formData.Set("scope", "openid")
+	formData.Set("token", a.userToken)
+
+	// Создаем запрос
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/uaa/oauth/token", a.BaseURL), bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("Error creating query: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Expect", "")
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp TokenResponse
+	err = json.Unmarshal(body, &tokenResp)
+	if err != nil {
+		return err
+	}
+
+	if tokenResp.TokenType == "bearer" {
+		a.token = "Bearer " + tokenResp.AccessToken
+		return nil
+	} else {
+		return nil
+	}
 }

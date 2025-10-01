@@ -11,8 +11,10 @@ import (
 type FSMClient struct {
 	baseURL  string
 	token    string
+	tu       string
 	user     string
 	password string
+	period   string
 	client   *http.Client
 	logFunc  *logger.LogWriter
 	debug    bool
@@ -27,20 +29,22 @@ type Content struct {
 	} `json:"content"`
 }
 
-func NewFSM(baseURL, token, user, password string, logFunc *logger.LogWriter) *FSMClient {
+func NewFSM(baseURL, tu, token, user, password, period string, logFunc *logger.LogWriter) *FSMClient {
 	return &FSMClient{
 		baseURL:  baseURL,
+		tu:       tu,
 		token:    token,
 		user:     user,
 		password: password,
 		logFunc:  logFunc,
+		period:   period,
 		client:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
 func (f *FSMClient) GetIM() Content {
 
-	resp, err := http.NewRequest("GET", f.baseURL, nil)
+	resp, err := http.NewRequest("GET", f.baseURL+"?LogicalName="+f.tu+"&"+f.period, nil)
 
 	if f.user != "" && f.password != "" {
 		resp.SetBasicAuth(f.user, f.password)

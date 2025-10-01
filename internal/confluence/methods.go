@@ -192,7 +192,7 @@ func (confl *API) UploadAttachment(id string, attachmentName string, attachment 
 	if err != nil {
 		return nil, err
 	}
-
+	f("ERROR: upload", string(res))
 	JsonCon, err := confl.GetJsonA(res)
 	if err != nil {
 		f("ERROR: CONFL", err)
@@ -203,7 +203,7 @@ func (confl *API) UploadAttachment(id string, attachmentName string, attachment 
 
 }
 
-func (confl *API) UpdateAttachment(id string, attachmentName string, attachid string, attachment io.Reader, f func(level string, logtext interface{})) (*ConflTypeA, error) {
+func (confl *API) UpdateAttachment(id string, attachmentName string, attachid string, attachment io.Reader, f func(level string, logtext interface{})) (*ConflTypeAResult, error) {
 
 	ep, err := url.ParseRequestURI(confl.Url.String() + "/rest/api/content/" + id + "/child/attachment/" + attachid + "/data")
 	if err != nil {
@@ -215,7 +215,7 @@ func (confl *API) UpdateAttachment(id string, attachmentName string, attachid st
 		return nil, err
 	}
 
-	JsonCon, err := confl.GetJsonA(res)
+	JsonCon, err := confl.GetJsonAR(res)
 	if err != nil {
 		f("ERROR: CONFL", err)
 		return nil, err
@@ -259,6 +259,17 @@ func (confl *API) GetAttachments(id string, f func(level string, logtext interfa
 func (confl *API) GetJsonA(content []byte) (*ConflTypeA, error) {
 
 	var JsonContent ConflTypeA
+	err := json.Unmarshal(content, &JsonContent)
+	if err != nil {
+		return nil, err
+	}
+	return &JsonContent, nil
+
+}
+
+func (confl *API) GetJsonAR(content []byte) (*ConflTypeAResult, error) {
+
+	var JsonContent ConflTypeAResult
 	err := json.Unmarshal(content, &JsonContent)
 	if err != nil {
 		return nil, err

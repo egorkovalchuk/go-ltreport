@@ -36,7 +36,7 @@ func (p *GrafanaClient) Close() {
 	p.client.CloseIdleConnections()
 }
 
-func (p *GrafanaClient) GetImage(Name string) (string, error) {
+func (p *GrafanaClient) GetImage(path, Name string) (string, error) {
 
 	resp, err := http.NewRequest("GET", p.baseURL, nil)
 	if err != nil {
@@ -66,7 +66,7 @@ func (p *GrafanaClient) GetImage(Name string) (string, error) {
 		}
 
 		// open a file for writing
-		file, err := os.Create(Name + ".png")
+		file, err := os.Create(path + Name + ".png")
 		if err != nil {
 			return "", err
 		}

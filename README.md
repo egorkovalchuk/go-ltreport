@@ -77,5 +77,7 @@ MIT License.
 
 --- 
 
+based on the project https://github.com/egorkovalchuk/go-ltreport
+
 **Author:** [Egor Kovalchuk](https://github.com/egorkovalchuk)  
 **Version:** 0.4.0

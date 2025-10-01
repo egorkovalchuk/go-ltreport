@@ -14,7 +14,7 @@ type API struct {
 	debug              bool
 }
 
-//структура запроса (взято с доки)
+// структура запроса (взято с доки)
 type ContentQuery struct {
 	Expand     []string
 	Limit      int    // page limit
@@ -30,8 +30,8 @@ type ContentQuery struct {
 
 }
 
-//json-to-go
-//Сформирован автоматически
+// json-to-go
+// Сформирован автоматически
 type ConflType struct {
 	ID       string   `json:"id"`
 	Type     string   `json:"type"`
@@ -59,8 +59,8 @@ type ConflType struct {
 	Expandable *Expandable `json:"_expandable"`
 }
 
-//json-to-go
-//Стурктура для создания страницы
+// json-to-go
+// Стурктура для создания страницы
 type ConflCreateType struct {
 	Type      string     `json:"type"`
 	Title     string     `json:"title"`
@@ -103,7 +103,7 @@ type Version struct {
 	Message   string `json:"message,omitempty"`
 }
 
-//Стуктура поиска
+// Стуктура поиска
 type Search struct {
 	//Results   []Results `json:"results"`
 	Start     int    `json:"start,omitempty"`
@@ -233,33 +233,35 @@ type Metadata struct {
 }
 
 type ConflTypeA struct {
-	Results []struct {
-		ID         string    `json:"id"`
-		Type       string    `json:"type"`
-		Status     string    `json:"status"`
-		Title      string    `json:"title"`
-		Metadata   *Metadata `json:"metadata"`
-		Extensions struct {
-			Mediatype string `json:"mediaType"`
-			Filesize  int    `json:"fileSize"`
-			Comment   string `json:"comment"`
-		} `json:"extensions"`
-		Links      *Links `json:"_links"`
-		Expandable struct {
-			Container    string `json:"container"`
-			Operations   string `json:"operations"`
-			Children     string `json:"children"`
-			Restrictions string `json:"restrictions"`
-			History      string `json:"history"`
-			Ancestors    string `json:"ancestors"`
-			Body         string `json:"body"`
-			Version      string `json:"version"`
-			Descendants  string `json:"descendants"`
-			Space        string `json:"space"`
-		} `json:"_expandable"`
-	} `json:"results"`
-	Start int    `json:"start"`
-	Limit int    `json:"limit"`
-	Size  int    `json:"size"`
-	Links *Links `json:"_links"`
+	Results []ConflTypeAResult `json:"results"`
+	Start   int                `json:"start"`
+	Limit   int                `json:"limit"`
+	Size    int                `json:"size"`
+	Links   *Links             `json:"_links"`
+}
+
+type ConflTypeAResult struct {
+	ID         string    `json:"id"`
+	Type       string    `json:"type"`
+	Status     string    `json:"status"`
+	Title      string    `json:"title"`
+	Metadata   *Metadata `json:"metadata"`
+	Extensions struct {
+		Mediatype string `json:"mediaType"`
+		Filesize  int    `json:"fileSize"`
+		Comment   string `json:"comment"`
+	} `json:"extensions"`
+	Links      *Links `json:"_links"`
+	Expandable struct {
+		Container    string `json:"container"`
+		Operations   string `json:"operations"`
+		Children     string `json:"children"`
+		Restrictions string `json:"restrictions"`
+		History      string `json:"history"`
+		Ancestors    string `json:"ancestors"`
+		Body         string `json:"body"`
+		Version      string `json:"version"`
+		Descendants  string `json:"descendants"`
+		Space        string `json:"space"`
+	} `json:"_expandable"`
 }

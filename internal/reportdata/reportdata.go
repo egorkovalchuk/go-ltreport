@@ -19,20 +19,27 @@ type Config struct {
 	ReportMask string `json:"ReportMask"`
 	// Путь к отчету
 	ReportPath string `json:"ReportPath"`
-	// Включение выкладнки на конфлюенс
-	ReportConfluenceOn bool `json:"ReportConfluenceOn"`
-	// Адрес конфлюенса
-	ReportConfluenceURL string `json:"ReportConfluenceURL"`
-	// Ид куда пишем данные
-	ReportConfluenceId string `json:"ReportConfluenceId"`
-	// Спейс конфлюенса
-	ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
-	ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
-	ReportConfluencePass  string `json:"ReportConfluencePass"`
-	ReportConfluenceToken string `json:"ReportConfluenceToken"`
-	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
-	ReportAllure          bool   `json:"ReportAllure"`
-	ReportIM              struct {
+	Confluence struct {
+		// Включение выкладнки на конфлюенс
+		ReportConfluenceOn bool `json:"ReportConfluenceOn"`
+		// Адрес конфлюенса
+		ReportConfluenceURL string `json:"ReportConfluenceURL"`
+		// Ид куда пишем данные
+		ReportConfluenceId string `json:"ReportConfluenceId"`
+		// Спейс конфлюенса
+		ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
+		ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
+		ReportConfluencePass  string `json:"ReportConfluencePass"`
+		ReportConfluenceToken string `json:"ReportConfluenceToken"`
+		ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
+	} `json:"Confluence"`
+	Allure struct {
+		ReportAllure   bool   `json:"ReportAllure"`
+		ReportEndPoint string `json:"ReportEndPoint"`
+		Token          string `json:"Token"`
+		ReportPath     string `json:"ReportPath"`
+	} `json:"Allure"`
+	ReportIM struct {
 		Token      string `json:"Token"`
 		LoginFSM   string `json:"LoginFSM"`
 		PassFSM    string `json:"PassFSM"`
@@ -106,65 +113,73 @@ type Config struct {
 			Description string `json:"Description"`
 		} `json:"JmeterQueryScnrThreshold"`
 	} `json:"Jmeter"`
-	Grafanadash []struct {
-		Name string `json:"Name"`
-		// авторизация на графане
-		AuthHeader string `json:"AuthHeader"`
-		//ссылка на даш
-		Urldash string `json:"UrlDash"`
-		//ссылка на панель
-		Urlpanel string `json:"UrlPanel"`
-		//Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
-		Urlimg string `json:"UrlImg"`
-		//Источник данных
-		SourceType int `json:"SourceType"`
-		//запрос данных для даша
-		Query string `json:"Query"`
-		//Порог для запроса
-		Threshold int `json:"Threshold"`
-		//Описание порога
-		ThDescription string `json:"ThDescription"`
-		//ссылка на запрос данных, смотреть в графане
-		UrlQuery string `json:"UrlQuery"`
-		//группировка
-		UrlQueryGroup string `json:"UrlQueryGroup"`
-		Size          struct {
-			Width  int
-			Height int
-		}
-	} `json:"GrafanaDash"`
-	GrafanadashTemplate []struct {
-		Name string `json:"Name"`
-		// авторизация на графане
-		AuthHeader string `json:"AuthHeader"`
-		// ссылка на даш
-		Urldash string `json:"UrlDash"`
-		// ссылка на панель
-		Urlpanel string `json:"UrlPanel"`
-		// Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
-		Urlimg string `json:"UrlImg"`
-		// Источник данных
-		SourceType int `json:"SourceType"`
-		// запрос данных для даша
-		Query string `json:"Query"`
-		// Порог для запроса
-		Threshold int `json:"Threshold"`
-		// Описание порога
-		ThDescription string `json:"ThDescription"`
-		// ссылка на запрос данных, смотреть в графане
-		UrlQuery string `json:"UrlQuery"`
-		// группировка
-		UrlQueryGroup string `json:"UrlQueryGroup"`
-		Size          struct {
-			Width  int
-			Height int
-		}
-		// Добавлять график если порог стреляет
-		ThresholdFilter bool `json:"ThresholdFilter"`
-		// Список
-		FileList    string `json:"FileList"`
-		FilePettern string `json:"FilePettern"`
-	} `json:"GrafanadashTemplate"`
+	Grafanadash         []GrafanaDashStruct         `json:"GrafanaDash"`
+	GrafanadashTemplate []GrafanadashTemplateStruct `json:"GrafanadashTemplate"`
+}
+
+type GrafanaDashStruct struct {
+	Name string `json:"Name"`
+	// авторизация на графане
+	AuthHeader string `json:"AuthHeader"`
+	//ссылка на даш
+	Urldash string `json:"UrlDash"`
+	//ссылка на панель
+	Urlpanel string `json:"UrlPanel"`
+	//Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+	Urlimg string `json:"UrlImg"`
+	//Источник данных
+	SourceType int `json:"SourceType"`
+	//запрос данных для даша
+	Query string `json:"Query"`
+	//Порог для запроса
+	Threshold int `json:"Threshold"`
+	//Описание порога
+	ThDescription string `json:"ThDescription"`
+	//ссылка на запрос данных, смотреть в графане
+	UrlQuery string `json:"UrlQuery"`
+	// Product
+	Tag string `json:"Tag"`
+	//группировка
+	UrlQueryGroup string `json:"UrlQueryGroup"`
+	Size          struct {
+		Width  int
+		Height int
+	}
+}
+
+type GrafanadashTemplateStruct struct {
+	Name string `json:"Name"`
+	// авторизация на графане
+	AuthHeader string `json:"AuthHeader"`
+	// ссылка на даш
+	Urldash string `json:"UrlDash"`
+	// ссылка на панель
+	Urlpanel string `json:"UrlPanel"`
+	// Ссылка на картинку в графане. Время from to не указвать, она формируется в скрипте
+	Urlimg string `json:"UrlImg"`
+	// Источник данных
+	SourceType int `json:"SourceType"`
+	// запрос данных для даша
+	Query string `json:"Query"`
+	// Порог для запроса
+	Threshold int `json:"Threshold"`
+	// Описание порога
+	ThDescription string `json:"ThDescription"`
+	// ссылка на запрос данных, смотреть в графане
+	UrlQuery string `json:"UrlQuery"`
+	// Product
+	Tag string `json:"Tag"`
+	// группировка
+	UrlQueryGroup string `json:"UrlQueryGroup"`
+	Size          struct {
+		Width  int
+		Height int
+	}
+	// Добавлять график если порог стреляет
+	ThresholdFilter bool `json:"ThresholdFilter"`
+	// Список
+	FileList    string `json:"FileList"`
+	FilePettern string `json:"FilePettern"`
 }
 
 // Вынесена структар из конфига
