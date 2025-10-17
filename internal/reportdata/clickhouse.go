@@ -51,7 +51,7 @@ func NewCHClient(baseURL string, user string, pass string, logFunc *logger.LogWr
 		baseURL: baseURL,
 		user:    user,
 		pass:    pass,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 120 * time.Second},
 		logFunc: logFunc,
 		debug:   debug,
 	}
@@ -82,6 +82,7 @@ func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod str
 		p.logFunc.ProcessInfo("Query ClickHouse succes ")
 	} else {
 		p.logFunc.ProcessError(fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
+		p.logFunc.ProcessDebug(resp)
 		return ClickHouseJson{}, fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode)
 	}
 
@@ -132,4 +133,49 @@ func (p *ClickHouseJson) JsonClickHouseParse(resp *http.Response, name string) e
 
 func (p *ClickHouseJson) DecodeResult() {
 
+}
+
+// Вычислем максимальные длины строки
+// Пересчет
+func (p *ClickHouseJson) Lens() map[string]int {
+	tmplen := make(map[string]int, len(p.Meta))
+
+	for _, m := range p.Meta {
+		tmplen[m.Name] = len(m.Name)
+	}
+
+	for _, m := range p.Data {
+		for key, value := range tmplen {
+
+			tmplen[key] = MaxInt(len(m[key].(string)), value)
+
+			var strValue string
+			switch v := m[key].(type) {
+			case string:
+				strValue = v
+			case fmt.Stringer:
+				strValue = v.String()
+			case int, float64, bool:
+				strValue = fmt.Sprintf("%v", v)
+			default:
+				continue // пропускаем неподдерживаемые типы
+			}
+
+			currentLength := len(strValue)
+			if currentMax, exists := tmplen[key]; !exists || currentLength > currentMax {
+				tmplen[key] = currentLength
+			}
+		}
+	}
+	return tmplen
+}
+
+func (p *ClickHouseJson) RoundToPrecision(precision int) {
+	for i, m := range p.Data {
+		for key, value := range m {
+			if num, ok := ConvIntefaceFloat64(value); ok {
+				p.Data[i][key] = fmt.Sprint(RoundToPrecision(num, 4))
+			}
+		}
+	}
 }

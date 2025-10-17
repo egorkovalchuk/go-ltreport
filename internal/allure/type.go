@@ -9,20 +9,25 @@ type TokenResponse struct {
 }
 
 type AllureResult struct {
-	UUID        string             `json:"uuid"`
-	Name        string             `json:"name"`
-	FullName    string             `json:"fullName"`
-	HistoryID   string             `json:"historyId"`
-	Status      string             `json:"status"`
-	Stage       string             `json:"stage"`
-	Start       int64              `json:"start"`
-	Stop        int64              `json:"stop"`
-	Steps       []AllureStep       `json:"steps"`
-	Labels      []AllureLabel      `json:"labels"`
-	Links       []AllureLink       `json:"links"`
-	Attachments []AllureAttachment `json:"attachments"`
-	Parameters  []AllureParameter  `json:"parameters"`
-	Description string             `json:"description,omitempty"`
+	UUID               string             `json:"uuid"`
+	Name               string             `json:"name"`
+	FullName           string             `json:"fullName"`
+	HistoryID          string             `json:"historyId"`
+	Status             string             `json:"status"`
+	Stage              string             `json:"stage"`
+	Start              int64              `json:"start"`
+	Stop               int64              `json:"stop"`
+	Description        string             `json:"description,omitempty"`
+	DescriptionHtml    string             `json:"descriptionHtml,omitempty"`
+	Precondition       string             `json:"precondition,omitempty"`
+	PreconditionHtml   string             `json:"preconditionHtml,omitempty"`
+	ExpectedResult     string             `json:"stexpectedResultop,omitempty"`
+	ExpectedResultHtml string             `json:"expectedResultHtml,omitempty"`
+	Steps              []AllureStep       `json:"steps"`
+	Labels             []AllureLabel      `json:"labels"`
+	Links              []AllureLink       `json:"links"`
+	Attachments        []AllureAttachment `json:"attachments"`
+	Parameters         []AllureParameter  `json:"parameters"`
 }
 
 type AllureStep struct {

@@ -225,9 +225,10 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	}
 	a.ProcessDebug("Load files count: " + fmt.Sprint(uploadResp.FilesCount))
 
+	var cnt int
 	exitcount := 0
 	for {
-		cnt, err := a.LaunchStat(id)
+		cnt, err = a.LaunchStat(id)
 		if err != nil {
 			a.ProcessError(err)
 			exitcount++
@@ -247,8 +248,9 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 			a.ProcessInfo("Waiting process files")
 			exitcount++
 		}
-		<-time.Tick(2 * time.Second)
+		<-time.Tick(3 * time.Second)
 	}
+	a.ProcessInfo(fmt.Sprintf("%d tests out of %d processed", cnt, a.testcount))
 
 	return nil
 }

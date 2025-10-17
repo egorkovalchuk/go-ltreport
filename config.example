@@ -114,7 +114,7 @@
              "Threshold": 90,
              // Описание порога
 			 "ThDescription": "CPU jopa",
-			 "Tag": "Product",
+			 "Tag": "Product:Test;layer:system",
              // размер картинки в pdf
              "Size": {"Width": 120, "Height": 50}
 			}
@@ -146,7 +146,7 @@
              "Size": {"Width": 120, "Height": 50},
 			 // Добавлять график только при срабатывании порога
 			 "ThresholdFilter": true,
-			 "Tag": "Product",
+			 "Tag": "Product:Test;layer:system",
 			 // Имя Файла и шаблон
 			 "FileList": "1.csv",
 			 "FilePettern": "server;name"

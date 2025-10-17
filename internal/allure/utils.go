@@ -215,3 +215,27 @@ func isAbsolutePath(path string) bool {
 
 	return false
 }
+
+func (a *Allure) ArrayToLabel(ar, label string) []AllureLabel {
+	tmp := []AllureLabel{}
+	headers := strings.Split(ar, ";")
+	for _, i := range headers {
+		before, after, found := strings.Cut(i, ":")
+
+		if found {
+			tmp = append(tmp, AllureLabel{Name: before, Value: after})
+		} else {
+			tmp = append(tmp, AllureLabel{Name: label, Value: i})
+		}
+	}
+	return tmp
+}
+
+func (a *Allure) GetValueLabel(tmp AllureResult, name string) string {
+	for _, i := range tmp.Labels {
+		if i.Name == name {
+			return i.Value
+		}
+	}
+	return "Unknown"
+}

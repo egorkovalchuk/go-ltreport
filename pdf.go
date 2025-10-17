@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/egorkovalchuk/go-ltreport/internal/fonts"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 
 	"github.com/jung-kurt/gofpdf"
@@ -17,12 +18,24 @@ var (
 
 func ReportPDFInit() {
 
+	fontManager := fonts.NewFontManager()
+	defer fontManager.Cleanup()
+
 	logs.ProcessInfo("File name " + reportfilename)
 	// Инициализация pdf
 	pdf = gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
+
+	// Настраиваем шрифты
+	if err := fontManager.SetupFonts(pdf); err != nil {
+		logs.ProcessError(err)
+	}
+
+	// Выключаем автоперенос, по умолчанию 20
+	pdf.SetAutoPageBreak(true, 9)
+	pdf.SetY(pdf.GetY() + 6)
 	pdf.SetFont("Times", "B", 16)
-	pdf.CellFormat(195, 7, "Report load testing for "+timeperiodstart.Format("02.01.2006 15:04")+"-"+timeperiodend.Format("02.01.2006 15:04"), "1", 0, "CM", false, 0, "")
+	pdf.CellFormat(195, 7, "Report load testing for "+timeperiodstart.Format("02.01.2006 15:04")+"-"+timeperiodend.Format("15:04"), "1", 0, "CM", false, 0, "")
 }
 
 func ReportEnd() {
@@ -37,12 +50,92 @@ func ReportEnd() {
 
 func ReportProblemPDF() {
 	logs.ProcessDebug("Start generate pdf - Problem ")
-	for _, i := range Problems {
-		if i.Type == "Grafana" || i.Type == "" {
-			pdf.SetFont("Times", "", 10)
-			pdf.SetY(pdf.GetY() + 7)
-			pdf.CellFormat(65, 7, i.Description, "", 0, "LM", false, 0, "")
+	saveX, saveY := pdf.GetXY()
+
+	// Цвета для таблицы
+	headerFillColor := [3]int{200, 200, 200} // серый для заголовков
+	rowFillColor := [3]int{240, 240, 240}    // светлый серый для четных строк
+
+	// Ширина колонок (сумма = 190 для A4 формата с полями)
+	colWidth := []float64{15, 15, 25, 120, 20} // number, avrName, briefDescription, description
+
+	// Заголовки колонок
+	headers := []string{"Tag", "Type", "Name", "Description", "Threshold"}
+	pdf.SetXY(saveX, saveY)
+	pdf.SetY(pdf.GetY() + 8)
+
+	pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+	pdf.SetFont("Times", "B", 10)
+	pdf.SetTextColor(0, 0, 0)
+
+	for i, header := range headers {
+		pdf.CellFormat(colWidth[i], 5, header, "1", 0, "C", true, 0, "")
+	}
+
+	pdf.Ln(-1)
+	for i, item := range Problems {
+		if item.Tag == "Jmeter" {
+			continue
 		}
+		logs.ProcessDebug(item)
+		pdf.SetFont("Times", "", 5)
+
+		// Получаем данные для строки
+		rowData := []string{item.Tag, item.Type, item.Name, item.Description, fmt.Sprint(item.Threshold)}
+
+		// Рассчитываем максимальную высоту для строки
+		maxLines := 1
+		for j, text := range rowData {
+			lines := SplitTextPdf(text, colWidth[j])
+			if len(lines) > maxLines {
+				maxLines = len(lines)
+			}
+		}
+
+		g, _ := pdf.GetFontSize()
+		rowHeight := float64(maxLines) * g
+
+		// Проверяем, не нужно ли добавить новую страницу
+		if pdf.GetY()+rowHeight+10 > float64(a4height) {
+			pdf.AddPage()
+			saveY = 10
+			pdf.SetXY(saveX, saveY)
+			// Повторяем заголовки на новой странице
+			pdf.SetFont("Times", "", 5)
+			pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+			for i, header := range headers {
+				pdf.CellFormat(colWidth[i], 7, header, "1", 0, "C", true, 0, "")
+			}
+			pdf.Ln(-1)
+		}
+
+		// Чередование цвета фона для строк
+		pdf.SetFont("Times", "", 5)
+		saveX, saveY = pdf.GetXY()
+
+		fill := i%2 == 1
+		if fill {
+			pdf.SetFillColor(rowFillColor[0], rowFillColor[1], rowFillColor[2])
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		pdf.MultiCell(colWidth[0], MultiCellSize(g, maxLines, []byte(item.Tag), colWidth[0]), item.Tag, "1", "C", fill)
+
+		pdf.SetXY(saveX+colWidth[0], saveY)
+		pdf.MultiCell(colWidth[1], MultiCellSize(g, maxLines, []byte(item.Type), colWidth[1]), item.Type, "1", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1], saveY)
+		pdf.MultiCell(colWidth[2], MultiCellSize(g, maxLines, []byte(item.Name), colWidth[2]), item.Name, "1", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1]+colWidth[2], saveY)
+		pdf.MultiCell(colWidth[3], MultiCellSize(g, maxLines, []byte(item.Description), colWidth[3]), item.Description, "1", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1]+colWidth[2]+colWidth[3], saveY)
+		pdf.MultiCell(colWidth[4], MultiCellSize(g, maxLines, []byte(fmt.Sprint(item.Threshold)), colWidth[4]), fmt.Sprint(item.Threshold), "1", "C", fill)
+
+		// Переходим к следующей строке
+		pdf.SetXY(saveX, saveY+rowHeight)
 	}
 }
 
@@ -54,12 +147,93 @@ func ReportProblemScenPDF() {
 	pdf.CellFormat(195, 7, "Report problem Jmeter", "0", 0, "CM", false, 0, "")
 	pdf.SetY(pdf.GetY() + 6)
 
-	for _, i := range Problems {
-		if i.Type == "Jmeter" {
-			pdf.SetFont("Times", "", 6)
-			pdf.SetY(pdf.GetY() + 3)
-			pdf.CellFormat(65, 3, i.Description, "", 0, "LM", false, 0, "")
+	saveX, saveY := pdf.GetXY()
+
+	// Цвета для таблицы
+	headerFillColor := [3]int{200, 200, 200} // серый для заголовков
+	rowFillColor := [3]int{240, 240, 240}    // светлый серый для четных строк
+
+	// Ширина колонок (сумма = 190 для A4 формата с полями)
+	colWidth := []float64{15, 15, 35, 110, 20} // number, avrName, briefDescription, description
+
+	// Заголовки колонок
+	headers := []string{"Tag", "Type", "Name", "Description", "Threshold"}
+	pdf.SetXY(saveX, saveY)
+	pdf.SetY(pdf.GetY() + 8)
+
+	pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+	pdf.SetFont("Times", "B", 10)
+	pdf.SetTextColor(0, 0, 0)
+
+	for i, header := range headers {
+		pdf.CellFormat(colWidth[i], 5, header, "1", 0, "C", true, 0, "")
+	}
+
+	pdf.Ln(-1)
+	for i, item := range Problems {
+		if item.Tag != "Jmeter" {
+			continue
 		}
+		logs.ProcessDebug(item)
+		pdf.SetFont("Times", "", 5)
+
+		// Получаем данные для строки
+		rowData := []string{item.Tag, item.Type, item.Name, item.Description, fmt.Sprint(item.Threshold)}
+
+		// Рассчитываем максимальную высоту для строки
+		maxLines := 1
+		for j, text := range rowData {
+			lines := SplitTextPdf(text, colWidth[j])
+			if len(lines) > maxLines {
+				maxLines = len(lines)
+			}
+
+		}
+
+		g, _ := pdf.GetFontSize()
+		rowHeight := float64(maxLines) * g
+
+		// Проверяем, не нужно ли добавить новую страницу
+		if pdf.GetY()+rowHeight+10 > float64(a4height) {
+			pdf.AddPage()
+			saveY = 10
+			pdf.SetXY(saveX, saveY)
+			// Повторяем заголовки на новой странице
+			pdf.SetFont("Times", "", 5)
+			pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+			for i, header := range headers {
+				pdf.CellFormat(colWidth[i], 7, header, "1", 0, "C", true, 0, "")
+			}
+			pdf.Ln(-1)
+		}
+
+		// Чередование цвета фона для строк
+		pdf.SetFont("Times", "", 5)
+		saveX, saveY = pdf.GetXY()
+
+		fill := i%2 == 1
+		if fill {
+			pdf.SetFillColor(rowFillColor[0], rowFillColor[1], rowFillColor[2])
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		pdf.MultiCell(colWidth[0], MultiCellSize(g, maxLines, []byte(item.Tag), colWidth[0]), item.Tag, "1", "C", fill)
+
+		pdf.SetXY(saveX+colWidth[0], saveY)
+		pdf.MultiCell(colWidth[1], MultiCellSize(g, maxLines, []byte(item.Type), colWidth[1]), item.Type, "1", "C", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1], saveY)
+		pdf.MultiCell(colWidth[2], MultiCellSize(g, maxLines, []byte(item.Name), colWidth[2]), item.Name, "1", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1]+colWidth[2], saveY)
+		pdf.MultiCell(colWidth[3], MultiCellSize(g, maxLines, []byte(item.Description), colWidth[3]), item.Description, "1", "L", fill)
+
+		pdf.SetXY(saveX+colWidth[0]+colWidth[1]+colWidth[2]+colWidth[3], saveY)
+		pdf.MultiCell(colWidth[4], MultiCellSize(g, maxLines, []byte(fmt.Sprint(item.Threshold)), colWidth[4]), fmt.Sprint(item.Threshold), "1", "C", fill)
+
+		// Переходим к следующей строке
+		pdf.SetXY(saveX, saveY+rowHeight)
 	}
 }
 func ReportInfluxPDF() {
@@ -233,33 +407,29 @@ func GrafanaReportPDF() {
 
 func ClickHouseReportPDF() {
 	logs.ProcessDebug("Start generate pdf - ClickHouse")
-	var saveX, saveY, tmpheight float64
-	saveX = 6
-	tmpheight = 0
-	saveY = 10
 
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 6)
 	pdf.SetFont("Times", "B", 16)
 	pdf.CellFormat(195, 7, "Report ClickHouse", "0", 0, "CM", false, 0, "")
-	saveX, saveY = pdf.GetXY()
+	pdf.Ln(-1)
+	saveX, saveY := pdf.GetXY()
 
 	// добавить вычисление длины для таблиц
 
 	for _, i := range LTClickHouse {
 
-		ln := pdf.PointConvert(6)
-
-		if pdf.GetY()+float64(25)+ln > a4height || saveY+25+ln > a4height {
+		if pdf.GetY()+float64(35) > a4height || saveY+35 > a4height {
 			pdf.AddPage()
 			saveY = 10
-			saveX = 6
+			pdf.SetXY(saveX, saveY)
 		}
 
 		pdf.SetXY(saveX, saveY)
 		pdf.SetY(pdf.GetY() + 8)
 		pdf.SetFont("Times", "B", 10)
 		pdf.CellFormat(195, 7, i.Name, "0", 0, "CM", false, 0, "")
+		pdf.Ln(-1)
 
 		pdf.SetY(pdf.GetY() + 8)
 		saveX, saveY = pdf.GetXY()
@@ -267,36 +437,82 @@ func ClickHouseReportPDF() {
 		// При создании новой таблицы проверяем, что она влазит на страницу
 		// Добавить перенос строк
 		// разобраться с отступом
-		saveX = 6
 
-		for _, j := range i.Meta {
-			pdf.SetFont("Times", "B", 5)
-			pdf.Rect(saveX, saveY, float64(j.Len+4), 5+tmpheight, "")
-			pdf.MultiCell(float64(j.Len+4), 5+tmpheight, j.Name, "", "CM", false)
-			saveX += float64(j.Len + 4)
-			pdf.SetXY(saveX, saveY)
+		// Цвета для таблицы
+		headerFillColor := [3]int{200, 200, 200} // серый для заголовков
+		rowFillColor := [3]int{240, 240, 240}    // светлый серый для четных
+
+		pdf.SetFillColor(headerFillColor[0], headerFillColor[1], headerFillColor[2])
+		pdf.SetFont("Times", "B", 5)
+		pdf.SetTextColor(0, 0, 0)
+
+		//_, g := pdf.GetFontSize()
+		g := pdf.GetStringWidth("3")
+		// Округление
+		i.RoundToPrecision(4)
+		// Вычисляем длину
+		tmpint := i.Lens()
+		// Расчет ширины колонок
+		var sum int
+		for key, value := range tmpint {
+			if value > 15 {
+				tmpint[key] = int(float64(value) * g)
+				sum += int(float64(value) * g)
+			} else {
+				tmpint[key] = 15
+				sum += 15
+			}
 		}
 
-		for _, jj := range i.Data {
-			saveX = 6
-			saveY += 5
+		cof := 190 / float64(sum)
 
-			if pdf.GetY()+float64(25)+ln > a4height || saveY+25+ln > a4height {
+		tmp := make(map[string]float64)
+		for key, value := range tmpint {
+			tmp[key] = float64(value) * cof
+		}
+
+		pdf.SetFont("Times", "B", 5)
+		for _, header := range i.Meta {
+			pdf.CellFormat(tmp[header.Name], 5, header.Name, "1", 0, "C", true, 0, "")
+		}
+		pdf.Ln(-1)
+
+		for fi, jj := range i.Data {
+
+			// Рассчитываем максимальную высоту для строки
+			maxLines := 1
+			for _, jjj := range i.Meta {
+				lines := SplitTextPdf(jj[jjj.Name].(string), tmp[jjj.Name])
+				if len(lines) > maxLines {
+					maxLines = len(lines)
+				}
+			}
+
+			gs, _ := pdf.GetFontSize()
+			rowHeight := float64(maxLines) * gs
+
+			if pdf.GetY()+rowHeight+10 > float64(a4height) {
 				pdf.AddPage()
-				saveX = 6
 				saveY = 10
 			}
 
-			pdf.SetXY(saveX, saveY)
-			pdf.SetFont("Times", "", 5)
-
-			for _, jjj := range i.Meta {
-				pdf.Rect(saveX, saveY, float64(jjj.Len+4), 5+tmpheight, "")
-				pdf.MultiCell(float64(jjj.Len+4), 5+tmpheight, jj[jjj.Name].(string), "", "", false)
-				saveX += float64(jjj.Len + 4)
-				pdf.SetXY(saveX, saveY)
+			fill := fi%2 == 1
+			if fill {
+				pdf.SetFillColor(rowFillColor[0], rowFillColor[1], rowFillColor[2])
+			} else {
+				pdf.SetFillColor(255, 255, 255)
 			}
 
+			pdf.SetFont("Times", "", 5)
+			saveX, saveY = pdf.GetXY()
+			saveXs := saveX
+
+			for _, jjj := range i.Meta {
+				pdf.SetXY(saveX, saveY)
+				pdf.MultiCell(tmp[jjj.Name], MultiCellSize(gs, maxLines, []byte(jj[jjj.Name].(string)), tmp[jjj.Name]), jj[jjj.Name].(string), "T", "L", fill)
+				saveX += tmp[jjj.Name]
+			}
+			pdf.SetXY(saveXs, saveY+rowHeight)
 		}
 		saveX, saveY = pdf.GetXY()
 	}
@@ -305,8 +521,6 @@ func ClickHouseReportPDF() {
 func ReportIMPDF() {
 	logs.ProcessDebug("Start generate pdf - FSM")
 	var saveX, saveY float64
-	saveX = 6
-	saveY = 10
 
 	pdf.AddPage()
 	pdf.SetY(pdf.GetY() + 6)
@@ -354,7 +568,7 @@ func ReportIMPDF() {
 		// Рассчитываем максимальную высоту для строки
 		maxLines := 1
 		for j, text := range rowData {
-			lines := pdf.SplitLines([]byte(text), colWidth[j]-2)
+			lines := SplitTextPdf(text, colWidth[j])
 			if len(lines) > maxLines {
 				maxLines = len(lines)
 			}
@@ -394,10 +608,48 @@ func ReportIMPDF() {
 
 }
 
-func sum(arr []float64) float64 {
-	total := 0.0
-	for _, v := range arr {
-		total += v
+func MultiCellSize(fontsize float64, maxLines int, text []byte, colWidth float64) float64 {
+	lines := SplitTextPdf(string(text), colWidth)
+	height := float64(maxLines) * fontsize
+	return height / float64(len(lines))
+}
+
+// IsUTF8Supported быстрая проверка поддержки UTF-8
+func IsUTF8Supported() bool {
+	// Критерии проверки:
+	// 1. Ширина кириллических символов > 0
+	// 2. Ширина специальных символов > 0
+	// 3. Отношение ширины Unicode к ASCII разумное
+
+	asciiWidth := pdf.GetStringWidth("Hello")
+	unicodeWidth := pdf.GetStringWidth("Привет")
+	specialWidth := pdf.GetStringWidth("©€")
+
+	// Если Unicode символы имеют разумную ширину
+	hasUnicodeSupport := unicodeWidth > 0 && unicodeWidth > asciiWidth*0.3
+	hasSpecialSupport := specialWidth > 0
+
+	return hasUnicodeSupport && hasSpecialSupport
+}
+
+func SplitTextPdf(text string, colWidth float64) []string {
+	if pdf == nil {
+		return []string{text} // Возвращаем исходный текст как одну строку
 	}
-	return total
+
+	// Проверяем валидность параметров
+	if text == "" || colWidth <= 0 {
+		return []string{text}
+	}
+
+	var lines []string
+	if IsUTF8Supported() {
+		lines = pdf.SplitText(text, colWidth)
+	} else {
+		lin := pdf.SplitLines([]byte(text), colWidth)
+		for _, j := range lin {
+			lines = append(lines, string(j))
+		}
+	}
+	return lines
 }

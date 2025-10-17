@@ -91,7 +91,7 @@ func NewInfluxClient(baseURL string, auth string, logFunc *logger.LogWriter, deb
 	return &InfluxClient{
 		baseURL: baseURL,
 		auth:    auth,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 120 * time.Second},
 		logFunc: logFunc,
 		debug:   debug,
 	}

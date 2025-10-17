@@ -1,14 +1,7 @@
 package reportdata
 
 import (
-	"encoding/json"
 	"fmt"
-	"math"
-	"net/http"
-	"path/filepath"
-	"sort"
-	"strings"
-	"time"
 )
 
 // Config configuration stucture
@@ -137,7 +130,7 @@ type GrafanaDashStruct struct {
 	ThDescription string `json:"ThDescription"`
 	//ссылка на запрос данных, смотреть в графане
 	UrlQuery string `json:"UrlQuery"`
-	// Product
+	// Tags
 	Tag string `json:"Tag"`
 	//группировка
 	UrlQueryGroup string `json:"UrlQueryGroup"`
@@ -167,7 +160,7 @@ type GrafanadashTemplateStruct struct {
 	ThDescription string `json:"ThDescription"`
 	// ссылка на запрос данных, смотреть в графане
 	UrlQuery string `json:"UrlQuery"`
-	// Product
+	// Tags
 	Tag string `json:"Tag"`
 	// группировка
 	UrlQueryGroup string `json:"UrlQueryGroup"`
@@ -207,6 +200,7 @@ type LTError struct {
 	Threshold   int
 	Description string
 	Type        string
+	Tag         string
 }
 
 // Структура сценария
@@ -241,30 +235,6 @@ type LTGrag struct {
 
 // Формирование списка для динамических шаблонов
 type DinamicRecord map[string]string
-
-func BeginningOfDay() time.Time {
-	t := time.Now()
-	return time.Date(t.Year(), t.Month(), t.Day(), 9, 0, 0, 0, time.Local)
-}
-
-// EndOfDay end of day
-func EndOfDay() time.Time {
-	t := time.Now()
-	return time.Date(t.Year(), t.Month(), t.Day(), 17, 59, 59, int(time.Second-time.Nanosecond), time.Local)
-}
-
-func BeginningOfHour() time.Time {
-	t := time.Now()
-	now := t.Hour()
-	return time.Date(t.Year(), t.Month(), t.Day(), now-1, 0, 0, 0, time.Local)
-}
-
-// EndOfDay end of day
-func EndOfHour() time.Time {
-	t := time.Now()
-	now := t.Hour()
-	return time.Date(t.Year(), t.Month(), t.Day(), now-1, 59, 59, int(time.Second-time.Nanosecond), time.Local)
-}
 
 func AddMap(m map[string]map[string]KeyField, TestName, ErrorField string, val KeyField) map[string]map[string]KeyField {
 	mm, ok := m[TestName]
@@ -311,125 +281,4 @@ func Helpstart() {
 	fmt.Println("Use -fsmpass start with Password FSM")
 	fmt.Println("Use -conflproxy start with proxy for connection to Confluence, example http://user:password@url:port")
 	fmt.Println("Use -start and -end for generate a report on an arbitrary date ")
-}
-
-func MaxInt(x int, y int) int {
-	if x > y {
-		return x
-	} else {
-		return y
-	}
-}
-
-func MaxInt64(x int64, y int64) int64 {
-	if x > y {
-		return x
-	} else {
-		return y
-	}
-}
-
-func MinInt64(x int64, y int64) int64 {
-	if x < y {
-		return x
-	} else {
-		return y
-	}
-}
-
-func ConvJsonNumFloat64(p interface{}) (float64, bool) {
-	num, ok := p.(json.Number)
-	if !ok {
-		return 0, false
-	}
-
-	tmp, err := num.Float64()
-	if err != nil {
-		return 0, false
-	}
-	return tmp, true
-}
-
-func ConvJsonNumInt64(p interface{}) (int64, bool) {
-	num, ok := p.(json.Number)
-	if !ok {
-		return 0, false
-	}
-
-	tmp, err := num.Int64()
-	if err != nil {
-		return 0, false
-	}
-	return tmp, true
-}
-
-func CheckStatusCode(StatusCode int, Status string) error {
-	switch StatusCode {
-	case http.StatusOK, http.StatusCreated, http.StatusPartialContent:
-		return nil
-	case http.StatusNoContent, http.StatusResetContent:
-		return nil
-	case http.StatusUnauthorized:
-		return fmt.Errorf("authentication failed")
-	case http.StatusServiceUnavailable:
-		return fmt.Errorf("service is not available: %s", Status)
-	case http.StatusInternalServerError:
-		return fmt.Errorf("internal server error: %s", Status)
-	case http.StatusConflict:
-		return fmt.Errorf("conflict: %s", Status)
-	default:
-		return fmt.Errorf("unknown response status: %s", Status)
-	}
-}
-
-// CalculatePercentile вычисляет заданный персентиль для набора значений
-func CalculatePercentile(values []float64, percentile float64) float64 {
-	if len(values) == 0 {
-		return math.NaN()
-	}
-
-	// Сортируем значения
-	sort.Float64s(values)
-
-	// Вычисляем индекс персентиля
-	index := (percentile / 100) * float64(len(values)-1)
-
-	// Если индекс целый - возвращаем соответствующее значение
-	if index == float64(int(index)) {
-		return values[int(index)]
-	}
-
-	// Интерполируем между соседними значениями
-	i := int(index)
-	fraction := index - float64(i)
-	return values[i] + fraction*(values[i+1]-values[i])
-}
-
-// HasTrailingSeparator проверяет наличие разделителя в конце пути
-func HasTrailingSeparator(path string) bool {
-	if path == "" {
-		return false
-	}
-	return strings.HasSuffix(path, string(filepath.Separator)) ||
-		strings.HasSuffix(path, "/") // для URL и универсальности
-}
-
-// EnsureTrailingSeparator добавляет разделитель в конце пути
-func EnsureTrailingSeparator(path string) string {
-	if path == "" {
-		return string(filepath.Separator)
-	}
-	if !HasTrailingSeparator(path) {
-		return path + string(filepath.Separator)
-	}
-	return path
-}
-
-// RemoveTrailingSeparator удаляет разделитель в конце пути
-func RemoveTrailingSeparator(path string) string {
-	if HasTrailingSeparator(path) {
-		// Удаляем все trailing separators
-		return strings.TrimRight(path, string(filepath.Separator)+"/")
-	}
-	return path
 }

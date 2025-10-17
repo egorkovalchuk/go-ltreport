@@ -25,7 +25,7 @@ const (
 	//  логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.5.0.0"
+	versionutil  = "0.6.0.0"
 	a4height     = 297
 	a4width      = 210
 )
@@ -133,7 +133,8 @@ func main() {
 	StartReport()
 	RemoveTemp()
 	if !bannotify {
-		err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("01\\.02\\.2006 15:04:05"), cfg.ReportPath+reportfilename+".pdf")
+		logs.ProcessInfo("Start notification")
+		err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("15:04:05"), cfg.ReportPath+reportfilename+".pdf")
 		if err != nil {
 			logs.ProcessError(err)
 		}
@@ -250,7 +251,7 @@ func ReportInflux() {
 
 					if jj.Value > float64(valthershold.Value) {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value))}
+						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
 						Problems = append(Problems, p)
 
 					}
@@ -266,16 +267,14 @@ func ReportInflux() {
 				if valthershold, okk := JMeterTestTh["*"][jj.Name]; okk {
 					if jj.Value > float64(valthershold.Value) {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value))}
+						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
 						Problems = append(Problems, p)
 
 					}
 				}
 			}
 		}
-
 	}
-
 }
 
 func InfluxErrorJmeter() {
@@ -370,7 +369,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
+							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
 							Problems = append(Problems, p)
 						}
 					}
@@ -387,7 +386,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
+							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
 							Problems = append(Problems, p)
 
 						}
@@ -404,7 +403,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter"}
+							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: ii.NameTest, Tag: "Jmeter"}
 							Problems = append(Problems, p)
 
 						}
@@ -436,13 +435,15 @@ func GrafanaReport() {
 			logs.ProcessError(err)
 		}
 
-		p.Name = i.Name
+		p.Name = convertEncoding(i.Name, "Error convert for dash"+i.Name)
 		p.Threshold = i.Threshold
 		p.ContentType = ConType
 		p.Size.Height = i.Size.Height
 		p.Size.Width = i.Size.Width
 		p.UrlDash = i.Urldash + timeperiod_grafana
 		LTGrafs = append(LTGrafs, p)
+
+		i.ThDescription = convertEncoding(i.ThDescription, "Error convert for dash"+i.Name)
 
 		if i.Query == "" {
 			continue
@@ -467,20 +468,24 @@ func GrafanaReport() {
 		logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
 
 		rstallure := allure.AllureResult{
-			UUID:       uuid.New().String(),
-			Name:       i.Name,
-			FullName:   i.Name,
-			HistoryID:  fmt.Sprintf("%s[%s start %d]", i.Name, i.Name, timeperiodstart.UnixMilli()),
-			Start:      timeperiodstart.UnixMilli(),
-			Stop:       timeperiodend.UnixMilli(),
-			Links:      []allure.AllureLink{{Name: "Grafana", URL: i.Urldash + timeperiod_grafana, Type: "requirement"}},
-			Steps:      []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
-			Labels:     []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}, {Name: "product", Value: i.Tag}, {Name: "tag", Value: i.Tag}},
-			Parameters: []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
+			UUID:        uuid.New().String(),
+			Name:        i.Name,
+			FullName:    i.Name,
+			HistoryID:   fmt.Sprintf("%s[%s start %d]", i.Name, i.Name, timeperiodstart.UnixMilli()),
+			Start:       timeperiodstart.UnixMilli(),
+			Stop:        timeperiodend.UnixMilli(),
+			Description: i.ThDescription,
+			Links:       []allure.AllureLink{{Name: "Grafana", URL: i.Urldash + timeperiod_grafana, Type: "requirement"}},
+			Steps:       []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
+			Labels:      []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}},
+			Parameters:  []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
 		}
 
+		templabel := convertEncoding(i.Tag, "Error convert for dash"+i.Name)
+		rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(templabel, "product")...)
+
 		if percentile > float64(i.Threshold) && err == nil {
-			ltp := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
+			ltp := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana", Tag: alluretmp.GetValueLabel(rstallure, "product")}
 			Problems = append(Problems, ltp)
 			rstallure.Status = "failed"
 			rstallure.Stage = "finished"
@@ -544,7 +549,8 @@ func GrafanaTemplateReport() {
 				tmp_dash := i.Urldash
 				tmp_query := i.Query
 				tmp_image := i.Urlimg
-				tmp_name := i.Name
+				tmp_name := convertEncoding(i.Name, "Error convert for dash"+tmp_dash)
+
 				for jj, head := range headers {
 					record[head] = line[jj]
 					tmp_dash = strings.Replace(tmp_dash, "{"+head+"}", line[jj], 1)
@@ -553,6 +559,7 @@ func GrafanaTemplateReport() {
 					tmp_name = strings.Replace(tmp_name, "{"+head+"}", line[jj], 1)
 				}
 				result = append(result, record)
+				i.ThDescription = convertEncoding(i.ThDescription, "Error convert for dash"+tmp_dash)
 
 				var percentile float64
 				if i.SourceType == 2 {
@@ -572,21 +579,26 @@ func GrafanaTemplateReport() {
 				}
 
 				rstallure := allure.AllureResult{
-					UUID:       uuid.New().String(),
-					Name:       tmp_name,
-					FullName:   tmp_name,
-					HistoryID:  fmt.Sprintf("%s[%s start %d]", i.Name, tmp_name, timeperiodstart.UnixMilli()),
-					Start:      timeperiodstart.UnixMilli(),
-					Stop:       timeperiodend.UnixMilli(),
-					Links:      []allure.AllureLink{{Name: "Grafana", URL: tmp_dash + timeperiod_grafana, Type: "requirement"}},
-					Steps:      []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
-					Labels:     []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}, {Name: "product", Value: line[1]}, {Name: "tag", Value: line[1]}},
-					Parameters: []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
+					UUID:        uuid.New().String(),
+					Name:        tmp_name,
+					FullName:    tmp_name,
+					HistoryID:   fmt.Sprintf("%s[%s start %d]", i.Name, tmp_name, timeperiodstart.UnixMilli()),
+					Start:       timeperiodstart.UnixMilli(),
+					Stop:        timeperiodend.UnixMilli(),
+					Description: i.ThDescription,
+					Links:       []allure.AllureLink{{Name: "Grafana", URL: tmp_dash + timeperiod_grafana, Type: "requirement"}},
+					Steps:       []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
+					Labels:      []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}},
+					Parameters:  []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
 				}
+
+				templabel := convertEncoding(line[1], "Error convert for dash"+tmp_dash)
+				rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(templabel, "product")...)
+				rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(convertEncoding(i.Tag, "Error convert for dash"+tmp_dash), "tag")...)
 
 				if percentile > float64(i.Threshold) && err == nil {
 					logs.ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
-					p := reportdata.LTError{Name: "Grafana: " + tmp_name + " " + strings.Join(line, ", "), Threshold: i.Threshold, Description: i.ThDescription + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana"}
+					p := reportdata.LTError{Name: tmp_name + " " + line[0], Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana", Tag: line[1]}
 					Problems = append(Problems, p)
 
 					gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, logs, debugm)
@@ -611,7 +623,7 @@ func GrafanaTemplateReport() {
 					rstallure.Stage = "finished"
 				} else if err != nil {
 					logs.ProcessError(err)
-					rstallure.Status = "skipped"
+					rstallure.Status = "broken"
 					rstallure.Stage = "finished"
 				} else {
 					rstallure.Status = "passed"
@@ -719,7 +731,6 @@ func ReportDownload(reportfilename string) {
 
 		JsonContC, err := confl.CreateContent(&data, logs.ProcessLog)
 		if err != nil {
-
 			logs.ProcessError(err)
 			return
 		}
@@ -737,9 +748,7 @@ func ReportDownload(reportfilename string) {
 			logs.ProcessDebug(arsp)
 		}
 		defer file.Close()
-
 		allurelink = arsp.Results[0].Links.Webui
-
 	} else {
 		logs.ProcessDebug("Load current attachments")
 		arsp, err := confl.GetAttachments(IdChild, logs.ProcessLog)

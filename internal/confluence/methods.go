@@ -165,6 +165,7 @@ func (confl *API) CreateContent(data *ConflCreateType, f func(level string, logt
 
 	res, err := confl.Request(req, f)
 	if err != nil {
+		f("ERROR: CONFL", string(res))
 		return nil, err
 	}
 
@@ -192,7 +193,7 @@ func (confl *API) UploadAttachment(id string, attachmentName string, attachment 
 	if err != nil {
 		return nil, err
 	}
-	f("ERROR: upload", string(res))
+
 	JsonCon, err := confl.GetJsonA(res)
 	if err != nil {
 		f("ERROR: CONFL", err)

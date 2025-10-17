@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,7 +149,7 @@ func InitTime() {
 	timeperiod_grafana = "&from=" + fmt.Sprintf("%d", timeperiodstart.Unix()) + "000&to=" + fmt.Sprintf("%d", timeperiodend.Unix()) + "000"
 	timeperiod_influx = ` time >= ` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", timeperiodend.Unix()) + `000ms `
 	timeperiod_prometheus = `&start=` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `&end=` + fmt.Sprintf("%d", timeperiodend.Unix())
-	timeperiod_clickhouse = " timestamp>=toDateTime('" + timeperiodstart.Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + timeperiodend.Format("2006-01-02 15:04:05") + "') "
+	timeperiod_clickhouse = " timestamp>=toDateTime('" + timeperiodstart.UTC().Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + timeperiodend.UTC().Format("2006-01-02 15:04:05") + "') "
 }
 
 func FindTimeWorkTest() (time.Time, time.Time) {
@@ -178,8 +179,8 @@ func FindTimeWorkTest() (time.Time, time.Time) {
 			if len(j) == 0 {
 				continue
 			}
-			if rate, ok := reportdata.ConvJsonNumFloat64(j[1]); ok && rate > 0 {
-				if num, ok := reportdata.ConvJsonNumInt64(j[0]); ok {
+			if rate, ok := reportdata.ConvIntefaceFloat64(j[1]); ok && rate > 0 {
+				if num, ok := reportdata.ConvIntefaceInt64(j[0]); ok {
 					if first {
 						min = num
 						max = num
@@ -209,12 +210,13 @@ func RemoveTemp() {
 		logs.ProcessError(err)
 		return
 	}
-	logs.ProcessDebug(directory)
-	readDirectory, err := os.Open(directory + "/tmp/")
+
+	readDirectory, err := os.Open(directory + string(filepath.Separator) + "tmp")
 	if err != nil {
 		logs.ProcessError(err)
 		return
 	}
+
 	allFiles, err := readDirectory.Readdir(0)
 	if err != nil {
 		logs.ProcessError(err)
@@ -225,7 +227,7 @@ func RemoveTemp() {
 		file := allFiles[f]
 		fileName := file.Name()
 		if strings.HasSuffix(fileName, ".png") {
-			os.Remove(fileName)
+			os.Remove(directory + string(filepath.Separator) + "tmp" + string(filepath.Separator) + fileName)
 		}
 	}
 }
@@ -253,4 +255,14 @@ func existsDir(path string) (bool, error) {
 	}
 
 	return false, err
+}
+
+func convertEncoding(str, des string) string {
+
+	temp, err := reportdata.ConvertEncoding([]byte(str))
+	if err != nil {
+		temp = str
+		logs.ProcessError(des + ": " + err.Error())
+	}
+	return temp
 }

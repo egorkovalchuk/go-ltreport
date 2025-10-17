@@ -29,3 +29,12 @@ Add gorutine
 Add api HPSM(local custom) 
 ## Fix
 Checked directory
+# 0.5.0.1
+## Features
+Add support utf8 
+Add font embed
+## Fix
+fix convert strigns to UTF8
+# 0.6.0.0
+## Features
+Getting Alert data from Grafana
