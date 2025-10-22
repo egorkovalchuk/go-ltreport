@@ -13,7 +13,6 @@ import (
 
 // режим Дебага
 var DebugFlag = false
-var LogFlag = false
 
 // Установить переменную дебага
 func SetDebug(state bool) {

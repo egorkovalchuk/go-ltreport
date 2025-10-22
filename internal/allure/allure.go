@@ -12,8 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type Allure struct {
@@ -50,16 +48,7 @@ func (a *Allure) CreateAllureReport(tmp AllureResult) {
 	result := tmp
 	// Сохраняем в файл
 	a.saveAllureResult(result)
-}
-
-func (a *Allure) createAttachment(name, mimeType string, content []byte) AllureAttachment {
-	attachmentUUID := uuid.New().String()
-	return AllureAttachment{
-		Name:    name,
-		Source:  attachmentUUID + "-attachment", // Allure ожидает такой формат
-		Type:    mimeType,
-		Content: base64.StdEncoding.EncodeToString(content), // base64 кодирование
-	}
+	a.saveAllureAttachments(result)
 }
 
 func (a *Allure) saveAllureResult(result AllureResult) {
@@ -146,7 +135,7 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	// Открываем файл
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("Cannot open file: %v", err)
+		return fmt.Errorf("Cannot open file: %w", err)
 	}
 	defer file.Close()
 
@@ -167,7 +156,7 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	}
 
 	if _, err := io.Copy(part, file); err != nil {
-		return fmt.Errorf("Cannot copy error file: %v", err)
+		return fmt.Errorf("Cannot copy error file: %w", err)
 	}
 
 	// Создаем часть для JSON данных
@@ -185,13 +174,13 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	}
 
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf("Error Close writer: %v", err)
+		return fmt.Errorf("Error Close writer: %w", err)
 	}
 
 	// Создаем запрос
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/rs/launch/%d/upload", a.BaseURL, id), body)
 	if err != nil {
-		return fmt.Errorf("Error creating query: %v", err)
+		return fmt.Errorf("Error creating query: %w", err)
 	}
 
 	// Устанавливаем заголовки
@@ -202,7 +191,7 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	// Выполняем запрос
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Error query execute: %v", err)
+		return fmt.Errorf("Error query execute: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -215,7 +204,7 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 	// Читаем успешный ответ
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Error read response: %v", err)
+		return fmt.Errorf("Error read response: %w", err)
 	}
 
 	var uploadResp UploadResponse
@@ -240,7 +229,7 @@ func (a *Allure) UploadArchive(zipFileName string, id int) error {
 				return err
 			}
 			break
-		} else if exitcount >= 5 {
+		} else if exitcount >= 100 {
 			a.ProcessError("Error process files, close manualy launch")
 			break
 		} else {
@@ -267,7 +256,7 @@ func (a *Allure) GetToken() error {
 	// Создаем запрос
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/uaa/oauth/token", a.BaseURL), bytes.NewBufferString(formData.Encode()))
 	if err != nil {
-		return fmt.Errorf("Error creating query: %v", err)
+		return fmt.Errorf("Error creating query: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

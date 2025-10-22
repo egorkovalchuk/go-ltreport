@@ -27,21 +27,27 @@ type PrometheusResponse struct {
 
 // PrometheusClient представляет клиент для работы
 type PrometheusClient struct {
-	baseURL string
-	auth    string
-	client  *http.Client
-	logFunc *logger.LogWriter
-	debug   bool
+	baseURL    string
+	auth       string
+	client     *http.Client
+	logs       *logger.LogWriter
+	debug      bool
+	start      time.Time
+	end        time.Time
+	Timeperiod string
 }
 
 // NewPrometheusClient создает новый экземпляр клиента
-func NewPrometheusClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *PrometheusClient {
+func NewPrometheusClient(baseURL string, auth string, start, end time.Time, logs *logger.LogWriter, debug bool) *PrometheusClient {
 	return &PrometheusClient{
-		baseURL: baseURL,
-		auth:    auth,
-		client:  &http.Client{Timeout: 30 * time.Second},
-		logFunc: logFunc,
-		debug:   debug,
+		baseURL:    baseURL,
+		auth:       auth,
+		client:     &http.Client{Timeout: 30 * time.Second},
+		logs:       logs,
+		debug:      debug,
+		start:      start,
+		end:        end,
+		Timeperiod: `&start=` + fmt.Sprintf("%d", start.Unix()) + `&end=` + fmt.Sprintf("%d", end.Unix()),
 	}
 }
 
@@ -52,34 +58,34 @@ func (p *PrometheusClient) Close() {
 func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error) {
 	req, err := http.NewRequest("GET", p.baseURL+"/api/v1/query?query="+query, nil)
 	if err != nil {
-		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %v", err)
+		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %w", err)
 	}
 	req.Header.Add("Authorization", p.auth)
 	resp, err := p.client.Do(req)
 
 	if err != nil {
-		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %v", err)
+		return PrometheusResponse{}, fmt.Errorf("GetDataMean request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		p.logFunc.ProcessInfo("Request prometheus threshold success")
+		p.logs.ProcessInfo("Request prometheus threshold success")
 		var prom PrometheusResponse
 		err = prom.JsonPrometheusParse(resp)
 		if err != nil {
-			return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Error parse: %v", err)
+			return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Error parse: %w", err)
 		} else {
 			return prom, nil
 		}
 	} else {
-		return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Request prometheus threshold error " + strconv.Itoa(resp.StatusCode) + " " + p.baseURL)
+		return PrometheusResponse{}, fmt.Errorf("PROMETEUS: Request prometheus threshold error %s %s", strconv.Itoa(resp.StatusCode), p.baseURL)
 	}
 }
 
 func (p *PrometheusClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
-	p.logFunc.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query)
-	prom, err := p.GetDataMean(query)
+	p.logs.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query + p.Timeperiod)
+	prom, err := p.GetDataMean(query + p.Timeperiod)
 	if err == nil {
 		percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
 		return percentile, nil
@@ -96,7 +102,7 @@ func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 	err = decoder.Decode(&p)
 
 	if err != nil {
-		return fmt.Errorf("PROMETEUS: %v", err)
+		return fmt.Errorf("PROMETEUS: %w", err)
 	}
 
 	if p.Status != "success" {

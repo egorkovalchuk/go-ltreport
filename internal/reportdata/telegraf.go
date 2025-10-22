@@ -61,7 +61,7 @@ func (p *TelegrafClient) GetDataSourceThreshold(query string) (float64, error) {
 		}
 
 	} else {
-		return 0, fmt.Errorf("Request prometheus threshold error " + strconv.Itoa(rsp_inf.StatusCode) + " " + p.baseURL)
+		return 0, fmt.Errorf("Request prometheus threshold error %s %s", strconv.Itoa(rsp_inf.StatusCode), p.baseURL)
 	}
 
 	return percentile, nil

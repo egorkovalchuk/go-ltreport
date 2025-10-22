@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-//Copy Virtomize/confluence-go-api
-//Выполнение самого запроса
+// Copy Virtomize/confluence-go-api
+// Выполнение самого запроса
 func (confl *API) Request(req *http.Request, f func(level string, logtext interface{})) ([]byte, error) {
 	req.Header.Add("Accept", "application/json, */*")
 
@@ -99,8 +99,8 @@ func (confl *API) SendContentAttachmentRequest(ep *url.URL, attachmentName strin
 	return res, nil
 }
 
-//Аутентификация по логину паролю
-//Надо добавить по токену
+// Аутентификация по логину паролю
+// Надо добавить по токену
 func (confl *API) Auth(req *http.Request) {
 	//Supports unauthenticated access to confluence:
 	//if username and token are not set, do not add authorization header

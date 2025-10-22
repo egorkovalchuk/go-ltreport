@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/allure"
-	"github.com/egorkovalchuk/go-ltreport/internal/confluence"
 	"github.com/egorkovalchuk/go-ltreport/internal/hpsm"
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 	"github.com/egorkovalchuk/go-ltreport/internal/notify"
+	"github.com/egorkovalchuk/go-ltreport/internal/pdf"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 	"github.com/google/uuid"
 )
@@ -26,8 +26,6 @@ const (
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
 	versionutil  = "0.6.0.0"
-	a4height     = 297
-	a4width      = 210
 )
 
 var (
@@ -44,26 +42,18 @@ var (
 	rmtmpfile bool
 	// запрос версии
 	version bool
-	// ошибки
-	err error
 	// Переменная для тестов
-	LTTest_dinamic []reportdata.LTTestDinamic
+	LTTest_dinamic reportdata.LTTestDinamics
 	// Переменная для анализа
-	Problems []reportdata.LTError
-	// Переменная для сценариев
-	LTScenario []reportdata.Scenario
-	// Устарело?
-	// LTScen_dimanic  map[string]reportdata.ScenarioDinamic
+	Problems reportdata.LTErrors
+	// Сценарии
 	LTScen_dimanict map[string]map[string]reportdata.ScenarioDinamic
 	// Массив графиков и порогов
-	LTGrafs []reportdata.LTGrag
+	LTGrafs reportdata.LTGrags
 	// Аварии
 	LTIM hpsm.Content
 	// allure
 	alluretmp *allure.Allure
-	// launch links
-	allurelink string
-
 	// Массив для ClickHouse
 	LTClickHouse []reportdata.ClickHouseJson
 )
@@ -155,7 +145,8 @@ func StartReport() {
 		}
 	}(alluretmp.GetError())
 
-	ReportPDFInit()
+	pdf := pdf.NewPDFWhriter(reportfilename, cfg.ReportPath, timeperiodstart, timeperiodend, cfg.Confluence, logs)
+	pdf.ReportPDFInit()
 
 	// Получение инцидентов
 	if cfg.ReportOn.ReportIM {
@@ -173,6 +164,7 @@ func StartReport() {
 
 	if cfg.ReportOn.ReportDash {
 		GrafanaReport()
+		GrafanaTemplateReport()
 	}
 
 	// Включение ClickHouse
@@ -182,33 +174,34 @@ func StartReport() {
 
 	// Формирование отчета
 	// Обязательно, поэтому не исключаем
-	ReportProblemPDF()
+	pdf.ReportProblemPDF(Problems)
 
 	// Включение графиков
 	if cfg.ReportOn.ReportDash {
-		GrafanaReportPDF()
+		pdf.GrafanaReportPDF(LTGrafs)
 	}
 
 	// Включение ClickHouse
 	if cfg.ReportOn.ReportClickHouse {
-		ClickHouseReportPDF()
+		pdf.ClickHouseReportPDF(LTClickHouse)
 	}
 
 	if cfg.ReportOn.ReportIM {
-		ReportIMPDF()
+		pdf.ReportIMPDF(LTIM)
 	}
 	// Прогрузка общенй информации
 	if cfg.ReportOn.ReportJmeter {
-		ReportInfluxPDF()
-		ReportProblemScenPDF()
-		ReportInfluxScrnPDF()
+		pdf.ReportInfluxPDF(LTTest_dinamic)
+		pdf.ReportProblemScenPDF(Problems)
+		pdf.ReportInfluxScrnPDF(LTScen_dimanict)
 	}
 
-	ReportEnd()
+	pdf.ReportEnd()
 
+	allurelink := ""
 	if cfg.Confluence.ReportConfluenceOn {
 		logs.ProcessInfo("Start load report on confluence")
-		ReportDownload(reportfilename + ".pdf")
+		allurelink = pdf.ReportDownload()
 	}
 
 	err := alluretmp.Finish("allure-report-"+time.Now().Format(cfg.ReportMask)+".zip", timeperiodstart, timeperiodend, cfg.Confluence.ReportConfluenceURL+allurelink)
@@ -251,9 +244,7 @@ func ReportInflux() {
 
 					if jj.Value > float64(valthershold.Value) {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
-						Problems = append(Problems, p)
-
+						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
 					}
 				}
 			}
@@ -267,9 +258,7 @@ func ReportInflux() {
 				if valthershold, okk := JMeterTestTh["*"][jj.Name]; okk {
 					if jj.Value > float64(valthershold.Value) {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						p := reportdata.LTError{Name: ii.NameTest, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
-						Problems = append(Problems, p)
-
+						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
 					}
 				}
 			}
@@ -280,8 +269,8 @@ func ReportInflux() {
 func InfluxErrorJmeter() {
 
 	logs.ProcessInfo("Load Jmeter delta")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
-	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQuery + " " + timeperiod_influx + " " + cfg.Jmeter.JmeterQueryGroup))
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
+	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQuery + " " + gc.Timeperiod + " " + cfg.Jmeter.JmeterQueryGroup))
 
 	if err != nil {
 		logs.ProcessError("InfluxErrorJmeter error")
@@ -319,8 +308,8 @@ func InfluxErrorJmeter() {
 func InfluxJmeterScenario() {
 
 	logs.ProcessInfo("Jmeter Scenario")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
-	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQueryScenario + timeperiod_influx + cfg.Jmeter.JmeterQueryScnrGroup))
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
+	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQueryScenario + gc.Timeperiod + cfg.Jmeter.JmeterQueryScnrGroup))
 
 	if err != nil {
 		logs.ProcessError("InfluxJmeterScenario error")
@@ -369,11 +358,9 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
-							Problems = append(Problems, p)
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
 					}
-
 				}
 				// смотрим дефолты
 			} else if _, ok := JMeterTestTh["*:*"]; ok {
@@ -386,11 +373,8 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: "Jmeter", Tag: "Jmeter"}
-							Problems = append(Problems, p)
-
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
-
 					}
 				}
 			} else if _, ok := JMeterTestTh[ii.NameTest+":*"]; ok {
@@ -403,11 +387,8 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							p := reportdata.LTError{Name: ii.NameTest + ":" + ii.NameThread, Threshold: valthershold.Value, Description: fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), Type: ii.NameTest, Tag: "Jmeter"}
-							Problems = append(Problems, p)
-
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
-
 					}
 				}
 			}
@@ -419,14 +400,13 @@ func GrafanaReport() {
 
 	logs.ProcessInfo("Load grafana metrics")
 
-	var p reportdata.LTGrag
 	for _, i := range cfg.Grafanadash {
 
 		logs.ProcessInfo("Load grafana " + i.Name)
-		request := i.Urlimg + timeperiod_grafana
-		logs.ProcessDebug("Get image request " + request)
 
-		gc := reportdata.NewGrafanaClient(request, i.AuthHeader, logs, debugm)
+		// получение картинки
+		gc := reportdata.NewGrafanaClient(i.Urlimg, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		logs.ProcessDebug("Get image request " + i.Urlimg + gc.Timeperiod)
 		ConType, err := gc.GetImage("tmp/", i.Name)
 		defer gc.Close()
 
@@ -435,38 +415,23 @@ func GrafanaReport() {
 			logs.ProcessError(err)
 		}
 
+		var p reportdata.LTGrag
 		p.Name = convertEncoding(i.Name, "Error convert for dash"+i.Name)
 		p.Threshold = i.Threshold
 		p.ContentType = ConType
 		p.Size.Height = i.Size.Height
 		p.Size.Width = i.Size.Width
-		p.UrlDash = i.Urldash + timeperiod_grafana
+		p.UrlDash = i.Urldash + gc.Timeperiod
 		LTGrafs = append(LTGrafs, p)
 
 		i.ThDescription = convertEncoding(i.ThDescription, "Error convert for dash"+i.Name)
 
-		if i.Query == "" {
+		if i.Query == "" && i.AlertID == 0 {
+			logs.ProcessWarm("Thresholds are not set for " + i.Name)
 			continue
 		}
 
-		var percentile float64
-		if i.SourceType == 2 {
-			//  получение данные из прометеуса
-			gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
-			defer gcs.Close()
-		} else if i.SourceType == 3 {
-			gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-			percentile, err = gh.Get99thPercentile(i.Query, timeperiodstart, timeperiodend)
-			defer gh.Close()
-		} else {
-			//  получение данные из инфлюкса
-			gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-			percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
-			defer gcs.Close()
-		}
-		logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
-
+		// подготовка записи в аллюр
 		rstallure := allure.AllureResult{
 			UUID:        uuid.New().String(),
 			Name:        i.Name,
@@ -475,27 +440,63 @@ func GrafanaReport() {
 			Start:       timeperiodstart.UnixMilli(),
 			Stop:        timeperiodend.UnixMilli(),
 			Description: i.ThDescription,
-			Links:       []allure.AllureLink{{Name: "Grafana", URL: i.Urldash + timeperiod_grafana, Type: "requirement"}},
-			Steps:       []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
-			Labels:      []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}},
-			Parameters:  []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
 		}
 
+		// Конвертирцем в UTF8
 		templabel := convertEncoding(i.Tag, "Error convert for dash"+i.Name)
-		rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(templabel, "product")...)
-
-		if percentile > float64(i.Threshold) && err == nil {
-			ltp := reportdata.LTError{Name: "Grafana: " + i.Name, Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana", Tag: alluretmp.GetValueLabel(rstallure, "product")}
-			Problems = append(Problems, ltp)
-			rstallure.Status = "failed"
-			rstallure.Stage = "finished"
-		} else {
-			rstallure.Status = "passed"
-			rstallure.Stage = "finished"
+		rstallure.ArrayToLabelRoot(templabel, "product")
+		rstallure.ArrayToLabelRoot("severity:critical;feature:"+i.ThDescription, "product")
+		rstallure.AddLink("Grafana", i.Urldash+gc.Timeperiod, "requirement")
+		rstallure.AddStep("Init request", "passed", timeperiodstart, timeperiodend)
+		err = rstallure.AddAttach(i.Name, allure.PNG, "tmp/"+i.Name+".png", nil)
+		if err != nil {
+			logs.ProcessError(err)
 		}
+		// по умолчанию пройден
+		rstallure.FilishedPassed()
+		// подготовка записи в аллюр
+
+		if i.Query != "" {
+			// Получаем данные
+			percentile, err := getThreshold(i.SourceType, i.UrlQuery, i.AuthHeader, i.Query, i.UrlQueryGroup)
+			statusstep := ""
+			if err != nil {
+				logs.ProcessError(err)
+				rstallure.FilishedBroken()
+				rstallure.AddAttach("error.txt", allure.Text, "", []byte(fmt.Sprintf("Error load data - sql: %s\n Error: %s", i.Query, err.Error())))
+				statusstep = "broken"
+			} else {
+				statusstep = "passed"
+			}
+
+			// Сохраняем данные в аллюр и проверяем сработку метрики
+			rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile)))
+			rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile))
+
+			logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
+			if percentile > float64(i.Threshold) && err == nil {
+				Problems.AddError(i.Name, i.Threshold, i.ThDescription, percentile, "Grafana", rstallure.GetValueLabel("product"))
+				rstallure.FilishedFailed()
+			}
+		}
+		if i.AlertID > 0 {
+			logs.ProcessDebug("Alerts " + i.Name)
+			alert, err := gc.GetAlerts(i.AlertID)
+			if err != nil {
+				logs.ProcessError(err)
+				rstallure.AddStep("Checked alerts", "failed", timeperiodstart, timeperiodend)
+			} else {
+				rstallure.AddStep("Checked alerts", "passed", timeperiodstart, timeperiodend)
+				if alert {
+					Problems.AddError("Grafana alert: "+i.Name, 0, "описание", 0, "Alerts", rstallure.GetValueLabel("product"))
+					logs.ProcessInfo(fmt.Sprintf("The dashboard %s alert has been triggered.", i.Name))
+					rstallure.FilishedFailed()
+				}
+			}
+		}
+		// сохраняем результат
 		alluretmp.CreateAllureReport(rstallure)
 	}
-	GrafanaTemplateReport()
 }
 
 func GrafanaTemplateReport() {
@@ -561,23 +562,7 @@ func GrafanaTemplateReport() {
 				result = append(result, record)
 				i.ThDescription = convertEncoding(i.ThDescription, "Error convert for dash"+tmp_dash)
 
-				var percentile float64
-				if i.SourceType == 2 {
-					//  получение данные из прометеуса
-					gcs := reportdata.NewPrometheusClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-					percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query+" "+i.UrlQueryGroup) + timeperiod_prometheus)
-					defer gcs.Close()
-				} else if i.SourceType == 3 {
-					gh := reportdata.NewGraphiteClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-					percentile, err = gh.Get99thPercentile(tmp_query, timeperiodstart, timeperiodend)
-					defer gh.Close()
-				} else {
-					//  получение данные из инфлюкса
-					gcs := reportdata.NewInfluxClient(i.UrlQuery, i.AuthHeader, logs, debugm)
-					percentile, err = gcs.GetThreshold(url.QueryEscape(i.Query + " AND " + timeperiod_influx + i.UrlQueryGroup))
-					defer gcs.Close()
-				}
-
+				// подготовка записи в аллюр
 				rstallure := allure.AllureResult{
 					UUID:        uuid.New().String(),
 					Name:        tmp_name,
@@ -586,28 +571,41 @@ func GrafanaTemplateReport() {
 					Start:       timeperiodstart.UnixMilli(),
 					Stop:        timeperiodend.UnixMilli(),
 					Description: i.ThDescription,
-					Links:       []allure.AllureLink{{Name: "Grafana", URL: tmp_dash + timeperiod_grafana, Type: "requirement"}},
-					Steps:       []allure.AllureStep{{Name: "Checked parameter", Status: "passed", Start: timeperiodstart.UnixMilli(), Stop: timeperiodend.UnixMilli()}},
-					Labels:      []allure.AllureLabel{{Name: "severity", Value: "critical"}, {Name: "feature", Value: i.ThDescription}},
-					Parameters:  []allure.AllureParameter{{Name: "Threshold", Value: strconv.Itoa(i.Threshold)}, {Name: "Value", Value: strconv.Itoa(int(percentile))}},
 				}
 
+				// Конвертирцем в UTF8
 				templabel := convertEncoding(line[1], "Error convert for dash"+tmp_dash)
-				rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(templabel, "product")...)
-				rstallure.Labels = append(rstallure.Labels, alluretmp.ArrayToLabel(convertEncoding(i.Tag, "Error convert for dash"+tmp_dash), "tag")...)
+				rstallure.ArrayToLabelRoot(templabel, "product")
+				rstallure.ArrayToLabelRoot(convertEncoding(i.Tag, "Error convert for dash"+tmp_dash), "tag")
+				rstallure.ArrayToLabelRoot("severity:critical;feature:"+i.ThDescription, "product")
+				rstallure.AddStep("Init request", "passed", timeperiodstart, timeperiodend)
+				// подготовка записи в аллюр
+
+				percentile, err := getThreshold(i.SourceType, i.UrlQuery, i.AuthHeader, tmp_query, i.UrlQueryGroup)
+				statusstep := ""
+				if err != nil {
+					statusstep = "broken"
+					rstallure.AddAttach("error.txt", allure.Text, "", []byte(fmt.Sprintf("Error load data - sql: %s\n Error: %s", tmp_query, err.Error())))
+				} else {
+					statusstep = "passed"
+				}
+
+				// Сохраняем данные в аллюр и проверяем сработку метрики
+				rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile)))
+				rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile))
+				// Создаем клиент
+				gc := reportdata.NewGrafanaClient(tmp_image, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+				defer gc.Close()
+				rstallure.AddLink("Grafana", tmp_dash+gc.Timeperiod, "requirement")
 
 				if percentile > float64(i.Threshold) && err == nil {
 					logs.ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
-					p := reportdata.LTError{Name: tmp_name + " " + line[0], Threshold: i.Threshold, Description: i.ThDescription + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)) + "", Type: "Grafana", Tag: line[1]}
-					Problems = append(Problems, p)
+					Problems.AddError(tmp_name, i.Threshold, i.ThDescription, percentile, "Grafana", line[1])
 
-					gc := reportdata.NewGrafanaClient(tmp_image+timeperiod_grafana, i.AuthHeader, logs, debugm)
-					ConType, err := gc.GetImage("tmp/", tmp_name)
-					defer gc.Close()
-
-					if err != nil {
+					ConType, erri := gc.GetImage("tmp/", tmp_name)
+					if erri != nil {
 						logs.ProcessError("Error generate image")
-						logs.ProcessError(err)
+						logs.ProcessError(erri)
 					} else {
 						var p reportdata.LTGrag
 						p.Name = tmp_name
@@ -615,20 +613,23 @@ func GrafanaTemplateReport() {
 						p.ContentType = ConType
 						p.Size.Height = i.Size.Height
 						p.Size.Width = i.Size.Width
-						p.UrlDash = tmp_dash + timeperiod_grafana
+						p.UrlDash = tmp_dash + gc.Timeperiod
 						LTGrafs = append(LTGrafs, p)
+						// Добавляем картинку в аллюр
+						erra := rstallure.AddAttach(tmp_name, allure.PNG, "tmp/"+tmp_name+".png", nil)
+						if erra != nil {
+							logs.ProcessError(err)
+						}
 					}
 
-					rstallure.Status = "failed"
-					rstallure.Stage = "finished"
+					rstallure.FilishedFailed()
 				} else if err != nil {
 					logs.ProcessError(err)
-					rstallure.Status = "broken"
-					rstallure.Stage = "finished"
+					rstallure.FilishedBroken()
 				} else {
-					rstallure.Status = "passed"
-					rstallure.Stage = "finished"
+					rstallure.FilishedPassed()
 				}
+				// сохраняем результат
 				alluretmp.CreateAllureReport(rstallure)
 			}
 		}(i)
@@ -639,9 +640,9 @@ func GrafanaTemplateReport() {
 func ClickHouseReport() {
 	logs.ProcessInfo("Start load ClickHouse")
 
-	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, logs, debugm)
+	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, timeperiodstart, timeperiodend, logs, debugm)
 	for _, i := range cfg.ClickHouse.Query {
-		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name, timeperiod_clickhouse)
+		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name)
 		if err == nil {
 			LTClickHouse = append(LTClickHouse, clkhouse)
 		} else {
@@ -658,136 +659,24 @@ func ReportIM() {
 	LTIM = fsm.GetIM()
 }
 
-// Загрузка в джиру
-func ReportDownload(reportfilename string) {
-	// пробрасываем дебаг
-	confluence.DebugFlag = debugm
-	// Указваем что писать в лог
-	confluence.LogFlag = true
-
-	// Инициализация работы с конфленсом
-	// перенеммные потом вынески в конфиг
-	confl, err := confluence.NewAPI(cfg.Confluence.ReportConfluenceURL, cfg.Confluence.ReportConfluenceLogin, cfg.Confluence.ReportConfluencePass, cfg.Confluence.ReportConfluenceToken, cfg.Confluence.ReportConfluenceProxy)
-	if err != nil {
-		logs.ProcessError("Error connection to confluence")
-		logs.ProcessError(err)
-		return
+func getThreshold(SourceType int, UrlQuery, AuthHeader, Query, UrlQueryGroup string) (float64, error) {
+	var percentile float64
+	var err error
+	switch SourceType {
+	case 2:
+		//  получение данные из прометеуса
+		gcs := reportdata.NewPrometheusClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		percentile, err = gcs.GetThreshold(url.QueryEscape(Query + " " + UrlQueryGroup))
+		defer gcs.Close()
+	case 3:
+		gh := reportdata.NewGraphiteClient(UrlQuery, AuthHeader, logs, debugm)
+		percentile, err = gh.Get99thPercentile(Query, timeperiodstart, timeperiodend)
+		defer gh.Close()
+	default:
+		//  получение данные из инфлюкса
+		gcs := reportdata.NewInfluxClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		percentile, err = gcs.GetThreshold(url.QueryEscape(Query + " AND " + gcs.Timeperiod + UrlQueryGroup))
+		defer gcs.Close()
 	}
-	// Получение описание базовой страницы
-	logs.ProcessDebug("GetContent")
-	JsonCont, err := confl.GetContent(cfg.Confluence.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.Confluence.ReportConfluenceSpace, Expand: []string{"children.page"}}, logs.ProcessLog)
-	if err != nil {
-		logs.ProcessError(err)
-		logs.ProcessError(JsonCont)
-		return
-	}
-	logs.ProcessDebug("GetContentChildPage")
-	JsonConC, err := confl.GetContentChildPage(cfg.Confluence.ReportConfluenceId, confluence.ContentQuery{SpaceKey: cfg.Confluence.ReportConfluenceSpace, Limit: 250, Expand: []string{"children.page"}}, logs.ProcessLog)
-	if err != nil {
-		logs.ProcessError(err)
-		logs.ProcessError(JsonConC)
-		return
-	}
-
-	currentTime := time.Now()
-	reportname := "Report" + currentTime.Format("20060102")
-
-	var IdChild string
-
-	// поиск по детям GetContentChildPage
-	for _, i := range JsonConC.Results {
-		if reportname == i.Title {
-			IdChild = i.ID
-			logs.ProcessDebug(i.Title + ", id=" + IdChild)
-		} else {
-			IdChild = ""
-		}
-	}
-
-	if IdChild == "" {
-		logs.ProcessDebug("Create child page " + reportname)
-		// формирование тела для создания
-		data := confluence.ConflCreateType{
-			Type:  "page",
-			Title: reportname,
-			Ancestors: []confluence.Ancestor{
-				{
-					ID: JsonCont.ID,
-				},
-			},
-			Body: confluence.Body{
-				Storage: confluence.Storage{
-					Value:          "Load testing report for " + currentTime.Format("02.01.2006") + "<br/> See Attachments",
-					Representation: "storage",
-				},
-			},
-			Version: &confluence.Version{
-				Number: 1,
-			},
-			Space: confluence.Space{
-				Key: cfg.Confluence.ReportConfluenceSpace,
-			},
-		}
-
-		JsonContC, err := confl.CreateContent(&data, logs.ProcessLog)
-		if err != nil {
-			logs.ProcessError(err)
-			return
-		}
-		IdChild = JsonContC.ID
-
-		file, err := os.OpenFile(cfg.ReportPath+reportfilename, os.O_RDONLY, 0666)
-		if err != nil {
-			logs.ProcessError(err)
-		}
-
-		logs.ProcessDebug("Upload current attachments " + reportfilename)
-		arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, logs.ProcessLog)
-		if err != nil {
-			logs.ProcessError(err)
-			logs.ProcessDebug(arsp)
-		}
-		defer file.Close()
-		allurelink = arsp.Results[0].Links.Webui
-	} else {
-		logs.ProcessDebug("Load current attachments")
-		arsp, err := confl.GetAttachments(IdChild, logs.ProcessLog)
-		if err != nil {
-			logs.ProcessError(err)
-			logs.ProcessDebug(arsp)
-		}
-
-		chck := false
-		attachid := "0"
-		for _, j := range arsp.Results {
-			if j.Title == reportfilename {
-				attachid = j.ID
-				chck = true
-			}
-		}
-
-		file, err := os.OpenFile(cfg.ReportPath+reportfilename, os.O_RDONLY, 0666)
-		if err != nil {
-			logs.ProcessInfo(err)
-		}
-
-		if chck {
-			logs.ProcessDebug("Update current attachments " + reportfilename)
-			arsp, err := confl.UpdateAttachment(IdChild, reportfilename, attachid, file, logs.ProcessLog)
-			if err != nil {
-				logs.ProcessInfo(err)
-				logs.ProcessDebug(arsp)
-			}
-			allurelink = arsp.Links.Webui
-		} else {
-			logs.ProcessDebug("Upload current attachments " + reportfilename)
-			arsp, err := confl.UploadAttachment(IdChild, reportfilename, file, logs.ProcessLog)
-			if err != nil {
-				logs.ProcessInfo(err)
-				logs.ProcessDebug(arsp)
-			}
-			allurelink = arsp.Results[0].Links.Webui
-		}
-		defer file.Close()
-	}
+	return percentile, err
 }

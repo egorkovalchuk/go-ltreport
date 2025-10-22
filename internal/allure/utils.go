@@ -65,7 +65,7 @@ func (a *Allure) deleteFiles() {
 	for f := range allFiles {
 		file := allFiles[f]
 		fileName := file.Name()
-		if strings.HasSuffix(a.path+fileName, ".json") {
+		if strings.HasSuffix(a.path+fileName, ".json") || strings.HasSuffix(a.path+fileName, "-attachment") {
 			if err := os.Remove(a.path + fileName); err != nil {
 				if os.IsNotExist(err) {
 					a.ProcessWarm(fmt.Sprintf("File %s not exist, skip\n", fileName))
@@ -78,7 +78,7 @@ func (a *Allure) deleteFiles() {
 }
 
 func (a *Allure) addFileToZip(zipWriter *zip.Writer, filename string) error {
-	if !strings.HasSuffix(filename, ".json") {
+	if !strings.HasSuffix(filename, ".json") && !strings.HasSuffix(filename, "-attachment") {
 		return nil
 	}
 
@@ -111,18 +111,28 @@ func (a *Allure) addFileToZip(zipWriter *zip.Writer, filename string) error {
 }
 
 func (a *Allure) createZip(zipFileName string) {
-	directory, err := os.Getwd()
-	if err != nil {
-		a.ProcessError(err)
-		return
+
+	var directory string
+	var err error
+
+	if isAbsolutePath(a.path) {
+		directory = a.path
+	} else {
+		directory, err = os.Getwd()
+		if err != nil {
+			a.ProcessError(err)
+			return
+		}
+		directory = directory + "/" + a.path
 	}
-	readDirectory, err := os.Open(directory + "/" + a.path)
+
+	readDirectory, err := os.Open(directory)
 	if err != nil {
 		a.ProcessError(err)
 		return
 	}
 
-	zipFile, err := os.Create(directory + "/" + a.path + zipFileName)
+	zipFile, err := os.Create(EnsureTrailingSeparator(directory) + zipFileName)
 	if err != nil {
 		a.ProcessError(err)
 		return
@@ -216,26 +226,31 @@ func isAbsolutePath(path string) bool {
 	return false
 }
 
-func (a *Allure) ArrayToLabel(ar, label string) []AllureLabel {
-	tmp := []AllureLabel{}
-	headers := strings.Split(ar, ";")
-	for _, i := range headers {
-		before, after, found := strings.Cut(i, ":")
+func getAttachmentType(filePath string) AttachmentType {
+	ext := strings.ToLower(filepath.Ext(filePath))
 
-		if found {
-			tmp = append(tmp, AllureLabel{Name: before, Value: after})
-		} else {
-			tmp = append(tmp, AllureLabel{Name: label, Value: i})
-		}
+	switch ext {
+	case ".txt", ".log":
+		return Text
+	case ".json":
+		return JSON
+	case ".xml":
+		return XML
+	case ".csv":
+		return CSV
+	case ".html", ".htm":
+		return HTML
+	case ".png":
+		return PNG
+	case ".jpg", ".jpeg":
+		return JPEG
+	case ".svg":
+		return SVG
+	case ".pdf":
+		return "application/pdf"
+	case ".yaml", ".yml":
+		return "application/yaml"
+	default:
+		return Text
 	}
-	return tmp
-}
-
-func (a *Allure) GetValueLabel(tmp AllureResult, name string) string {
-	for _, i := range tmp.Labels {
-		if i.Name == name {
-			return i.Value
-		}
-	}
-	return "Unknown"
 }

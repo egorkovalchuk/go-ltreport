@@ -37,60 +37,66 @@ type ClickHouseJson struct {
 
 // CHClient представляет клиент для работы с Grafana
 type CHClient struct {
-	baseURL string
-	user    string
-	pass    string
-	client  *http.Client
-	logFunc *logger.LogWriter
-	debug   bool
+	baseURL    string
+	user       string
+	pass       string
+	client     *http.Client
+	logs       *logger.LogWriter
+	debug      bool
+	start      time.Time
+	end        time.Time
+	Timeperiod string
 }
 
 // NewCHClient создает новый экземпляр клиента
-func NewCHClient(baseURL string, user string, pass string, logFunc *logger.LogWriter, debug bool) *CHClient {
+func NewCHClient(baseURL string, user string, pass string, start, end time.Time, logs *logger.LogWriter, debug bool) *CHClient {
 	return &CHClient{
-		baseURL: baseURL,
-		user:    user,
-		pass:    pass,
-		client:  &http.Client{Timeout: 120 * time.Second},
-		logFunc: logFunc,
-		debug:   debug,
+		baseURL:    baseURL,
+		user:       user,
+		pass:       pass,
+		client:     &http.Client{Timeout: 120 * time.Second},
+		logs:       logs,
+		debug:      debug,
+		start:      start,
+		end:        end,
+		Timeperiod: " timestamp>=toDateTime('" + start.UTC().Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + end.UTC().Format("2006-01-02 15:04:05") + "') ",
 	}
 }
 
-func (p *CHClient) GetSql(DBname string, sql string, name string, timeperiod string) (ClickHouseJson, error) {
+func (p *CHClient) GetSql(DBname string, sql string, name string) (ClickHouseJson, error) {
 
 	resp, err := http.NewRequest("GET", p.baseURL, nil)
 	if err != nil {
-		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %v", err)
+		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %w", err)
 	}
-	p.logFunc.ProcessDebug(strings.Replace(sql, "{timestamp}", timeperiod, 1) + " FORMAT JSONStrings")
+	p.logs.ProcessDebug(strings.Replace(sql, "{timestamp}", p.Timeperiod, 1) + " FORMAT JSONStrings")
 
 	resp.SetBasicAuth(p.user, p.pass)
 	resp.Header.Add("Content-Type", "application/json")
 	resp.Header.Add("X-ClickHouse-Progress", "1")
 	resp.Header.Add("X-ClickHouse-Database", DBname)
 	resp.Header.Add("User-Agent", "go-LT-Report")
-	resp.Body = ioutil.NopCloser(strings.NewReader(strings.Replace(sql, "{timestamp}", timeperiod, 1) + " FORMAT JSONStrings"))
+	resp.Body = ioutil.NopCloser(strings.NewReader(strings.Replace(sql, "{timestamp}", p.Timeperiod, 1) + " FORMAT JSONStrings"))
 
 	rsp, err := p.client.Do(resp)
 	if err != nil {
-		p.logFunc.ProcessError(fmt.Errorf("GetSql request failed: %v", err))
-		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %v", err)
+		p.logs.ProcessError(fmt.Errorf("GetSql request failed: %w", err))
+		return ClickHouseJson{}, fmt.Errorf("GetSql request failed: %w", err)
 	}
 
 	if rsp.StatusCode == http.StatusOK {
-		p.logFunc.ProcessInfo("Query ClickHouse succes ")
+		p.logs.ProcessInfo("Query ClickHouse succes ")
 	} else {
-		p.logFunc.ProcessError(fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
-		p.logFunc.ProcessDebug(resp)
+		p.logs.ProcessError(fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode))
+		p.logs.ProcessDebug(resp)
 		return ClickHouseJson{}, fmt.Errorf("ClickHouse API returned status %d", rsp.StatusCode)
 	}
 
 	var clkhouse ClickHouseJson
 	err = clkhouse.JsonClickHouseParse(rsp, name)
 	if err != nil {
-		p.logFunc.ProcessError(fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err))
-		return ClickHouseJson{}, fmt.Errorf("GetSql JsonClickHouseParse failed: %v", err)
+		p.logs.ProcessError(fmt.Errorf("GetSql JsonClickHouseParse failed: %w", err))
+		return ClickHouseJson{}, fmt.Errorf("GetSql JsonClickHouseParse failed: %w", err)
 	}
 
 	p.client.CloseIdleConnections()
@@ -110,7 +116,7 @@ func (p *ClickHouseJson) JsonClickHouseParse(resp *http.Response, name string) e
 	err = decoder.Decode(&p)
 
 	if err != nil {
-		return fmt.Errorf("CH: %v", err)
+		return fmt.Errorf("CH: %w", err)
 	}
 
 	var tmp []MetaStruct

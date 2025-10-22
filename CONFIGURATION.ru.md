@@ -214,7 +214,6 @@
 - `Name` - название дашборда
 - `UrlDash` - URL дашборда Grafana
 - `AuthHeader` - заголовок авторизации Bearer token
-- `UrlPanel` - URL конкретной панели
 - `UrlImg` - URL для рендеринга изображения
 - `Query` - запрос для получения данных
 - `SourceType` - тип источника данных (1-telegraf, 2-prometheus, 3-graphite)

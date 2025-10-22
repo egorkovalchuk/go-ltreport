@@ -65,7 +65,7 @@ func (a *Allure) GetLaunch(launchID int) error {
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/rs/launch/%d", a.BaseURL, launchID), nil)
 	if err != nil {
-		return fmt.Errorf("Error creating query: %v", err)
+		return fmt.Errorf("Error creating query: %w", err)
 	}
 	req.Header.Set("Authorization", a.token)
 
@@ -98,7 +98,7 @@ func (a *Allure) CloseLaunch(launchID int) error {
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/rs/launch/%d/close", a.BaseURL, launchID), nil)
 	if err != nil {
-		return fmt.Errorf("Error creating query: %v", err)
+		return fmt.Errorf("Error creating query: %w", err)
 	}
 	req.Header.Set("Authorization", a.token)
 
@@ -120,7 +120,7 @@ func (a *Allure) LaunchStat(launchID int) (int, error) {
 	a.ProcessDebug("Load statistic launch")
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/rs/launch/%d/statistic", a.BaseURL, launchID), nil)
 	if err != nil {
-		return 0, fmt.Errorf("Error creating query: %v", err)
+		return 0, fmt.Errorf("Error creating query: %w", err)
 	}
 	req.Header.Set("Authorization", a.token)
 

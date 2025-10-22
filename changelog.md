@@ -38,3 +38,4 @@ fix convert strigns to UTF8
 # 0.6.0.0
 ## Features
 Getting Alert data from Grafana
+Add Attachment for allure

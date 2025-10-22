@@ -17,15 +17,12 @@ import (
 )
 
 var (
-	logs       *logger.LogWriter
-	loggerOnce sync.Once
+	logs           *logger.LogWriter
+	loggerOnce     sync.Once
+	reportfilename string
 	// время формирования отчетов
-	timeperiod_influx     string
-	timeperiod_prometheus string
-	timeperiod_clickhouse string
-	timeperiod_grafana    string
-	timeperiodstart       time.Time
-	timeperiodend         time.Time
+	timeperiodstart time.Time
+	timeperiodend   time.Time
 	// Пользовательский период формировани
 	EndDateStr   string
 	StartDateStr string
@@ -145,18 +142,12 @@ func InitTime() {
 		logs.ProcessInfo("Start group by day")
 		timeperiodstart, timeperiodend = FindTimeWorkTest()
 	}
-
-	timeperiod_grafana = "&from=" + fmt.Sprintf("%d", timeperiodstart.Unix()) + "000&to=" + fmt.Sprintf("%d", timeperiodend.Unix()) + "000"
-	timeperiod_influx = ` time >= ` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", timeperiodend.Unix()) + `000ms `
-	timeperiod_prometheus = `&start=` + fmt.Sprintf("%d", timeperiodstart.Unix()) + `&end=` + fmt.Sprintf("%d", timeperiodend.Unix())
-	timeperiod_clickhouse = " timestamp>=toDateTime('" + timeperiodstart.UTC().Format("2006-01-02 15:04:05") + "') and timestamp <=toDateTime('" + timeperiodend.UTC().Format("2006-01-02 15:04:05") + "') "
 }
 
 func FindTimeWorkTest() (time.Time, time.Time) {
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", logs, debugm)
+	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", reportdata.BeginningOfDay(), reportdata.EndOfDay(), logs, debugm)
 
-	timeperiod := ` time >= ` + fmt.Sprintf("%d", reportdata.BeginningOfDay().Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", reportdata.EndOfDay().Unix()) + `000ms `
-	infjson, err := gc.GetDataMean(url.QueryEscape("SELECT max(\"rate\") FROM \"delta\" WHERE" + " " + timeperiod + " " + "GROUP BY time(15m) fill(0)"))
+	infjson, err := gc.GetDataMean(url.QueryEscape("SELECT max(\"rate\") FROM \"delta\" WHERE" + " " + gc.Timeperiod + " " + "GROUP BY time(15m) fill(0)"))
 
 	if err != nil {
 		logs.ProcessWarm("FindTimeWorkTest error")

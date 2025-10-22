@@ -28,17 +28,17 @@ type GraphiteClient struct {
 	baseURL string
 	client  *http.Client
 	auth    string
-	logFunc *logger.LogWriter
+	logs    *logger.LogWriter
 	debug   bool
 }
 
 // NewGraphiteClient создает новый экземпляр клиента
-func NewGraphiteClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *GraphiteClient {
+func NewGraphiteClient(baseURL string, auth string, logs *logger.LogWriter, debug bool) *GraphiteClient {
 	return &GraphiteClient{
 		baseURL: baseURL,
 		auth:    auth,
 		client:  &http.Client{Timeout: 30 * time.Second},
-		logFunc: logFunc,
+		logs:    logs,
 		debug:   debug,
 	}
 }
@@ -54,21 +54,21 @@ func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]Me
 	//gc.ProcessDebug(requestURL)
 	rsp, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		gc.logFunc.ProcessDebug("Get Graphite threshold request: " + requestURL)
-		return nil, fmt.Errorf("request failed: %v", err)
+		gc.logs.ProcessDebug("Get Graphite threshold request: " + requestURL)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	rsp.Header.Add("Authorization", gc.auth)
 
 	resp, err := gc.client.Do(rsp)
 
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		gc.logFunc.ProcessDebug("Get Graphite threshold request: " + requestURL)
+		gc.logs.ProcessDebug("Get Graphite threshold request: " + requestURL)
 		return nil, fmt.Errorf("graphite API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -79,7 +79,7 @@ func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]Me
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&rawResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// Преобразуем в наш формат
@@ -118,7 +118,7 @@ func (gc *GraphiteClient) ListMetrics() ([]string, error) {
 
 	resp, err := gc.client.Get(requestURL)
 	if err != nil {
-		return nil, fmt.Errorf("request failed: %v", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -128,7 +128,7 @@ func (gc *GraphiteClient) ListMetrics() ([]string, error) {
 	}
 	var metrics []string
 	if err := json.NewDecoder(resp.Body).Decode(&metrics); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	return metrics, nil
 }

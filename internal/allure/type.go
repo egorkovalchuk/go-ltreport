@@ -1,5 +1,20 @@
 package allure
 
+// Основные MIME types для вложений
+const (
+	Text   AttachmentType = "text/plain"
+	JSON   AttachmentType = "application/json"
+	XML    AttachmentType = "application/xml"
+	CSV    AttachmentType = "text/csv"
+	HTML   AttachmentType = "text/html"
+	PNG    AttachmentType = "image/png"
+	JPEG   AttachmentType = "image/jpeg"
+	SVG    AttachmentType = "image/svg+xml"
+	Binary AttachmentType = "application/octet-stream"
+)
+
+type AttachmentType string
+
 type TokenResponse struct {
 	ExpiresIn   int64  `json:"expires_in"`
 	Jti         string `json:"jti"`

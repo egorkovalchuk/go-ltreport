@@ -61,7 +61,7 @@ func (fm *FontManager) SetupFonts(pdf *gofpdf.Fpdf) error {
 
 		// Сохраняем шрифт во временный файл
 		if err := os.WriteFile(fontPath, font.data, 0644); err != nil {
-			return fmt.Errorf("Error saving font %s: %v", filename, err)
+			return fmt.Errorf("Error saving font %s: %w", filename, err)
 		}
 
 		// Добавляем шрифт в PDF

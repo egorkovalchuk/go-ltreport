@@ -109,4 +109,4 @@ MIT License.
 --- 
 
 **Автор:** [Egor Kovalchuk](https://github.com/egorkovalchuk)  
-**Версия:** 0.5.0
+**Версия:** 0.6.0

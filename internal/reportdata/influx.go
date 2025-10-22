@@ -68,6 +68,7 @@ type LTTestDinamic struct {
 	NameTest string
 	Field    []YField
 }
+type LTTestDinamics []LTTestDinamic
 
 // для хранения поля ответа
 type YField struct {
@@ -79,21 +80,27 @@ type YField struct {
 
 // InfluxClient представляет клиент для работы
 type InfluxClient struct {
-	baseURL string
-	auth    string
-	client  *http.Client
-	logFunc *logger.LogWriter
-	debug   bool
+	baseURL    string
+	auth       string
+	client     *http.Client
+	logs       *logger.LogWriter
+	debug      bool
+	start      time.Time
+	end        time.Time
+	Timeperiod string
 }
 
 // NewPrometheusClient создает новый экземпляр клиента
-func NewInfluxClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *InfluxClient {
+func NewInfluxClient(baseURL string, auth string, start, end time.Time, logs *logger.LogWriter, debug bool) *InfluxClient {
 	return &InfluxClient{
-		baseURL: baseURL,
-		auth:    auth,
-		client:  &http.Client{Timeout: 120 * time.Second},
-		logFunc: logFunc,
-		debug:   debug,
+		baseURL:    baseURL,
+		auth:       auth,
+		client:     &http.Client{Timeout: 120 * time.Second},
+		logs:       logs,
+		debug:      debug,
+		start:      start,
+		end:        end,
+		Timeperiod: ` time >= ` + fmt.Sprintf("%d", start.Unix()) + `000ms AND time <= ` + fmt.Sprintf("%d", end.Unix()) + `000ms `,
 	}
 }
 
@@ -115,26 +122,26 @@ func (p *InfluxClient) GetThreshold(query string) (float64, error) {
 func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 	resp_inf, err := http.NewRequest("GET", p.baseURL+""+query, nil)
 	if err != nil {
-		return Mean{}, fmt.Errorf("GetDataMean request failed: %v", err)
+		return Mean{}, fmt.Errorf("GetDataMean request failed: %w", err)
 	}
 	if p.auth != "" {
 		resp_inf.Header.Add("Authorization", p.auth)
 	}
-	p.logFunc.ProcessInfo("Influx request " + p.baseURL + "" + query)
+	p.logs.ProcessInfo("Influx request " + p.baseURL + "" + query)
 
 	rsp_inf, err := p.client.Do(resp_inf)
 	if err != nil {
-		return Mean{}, fmt.Errorf("GetDataMean request failed: %v", err)
+		return Mean{}, fmt.Errorf("GetDataMean request failed: %w", err)
 	}
 	defer rsp_inf.Body.Close()
 
 	if rsp_inf.StatusCode == http.StatusOK {
-		p.logFunc.ProcessInfo("Request Influx success")
+		p.logs.ProcessInfo("Request Influx success")
 		infjson, err := JsonINfluxParse(rsp_inf)
 		if err == nil {
 			return infjson, nil
 		} else {
-			return Mean{}, fmt.Errorf("GetDataMean error parse: %v", err)
+			return Mean{}, fmt.Errorf("GetDataMean error parse: %w", err)
 		}
 	} else {
 		return Mean{}, fmt.Errorf("influx API returned status %d: %s", rsp_inf.StatusCode, p.baseURL+query)
@@ -281,7 +288,7 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 	err = decoder.Decode(&infjson)
 
 	if err != nil {
-		return infjson, fmt.Errorf("INFLUX: %v", err)
+		return infjson, fmt.Errorf("INFLUX: %w", err)
 	}
 
 	if len(infjson.Results) == 0 || len(infjson.Results[0].Series) == 0 {

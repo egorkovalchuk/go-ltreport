@@ -2,6 +2,7 @@ package reportdata
 
 import (
 	"fmt"
+	"strconv"
 )
 
 // Config configuration stucture
@@ -11,22 +12,9 @@ type Config struct {
 	// Маска даты
 	ReportMask string `json:"ReportMask"`
 	// Путь к отчету
-	ReportPath string `json:"ReportPath"`
-	Confluence struct {
-		// Включение выкладнки на конфлюенс
-		ReportConfluenceOn bool `json:"ReportConfluenceOn"`
-		// Адрес конфлюенса
-		ReportConfluenceURL string `json:"ReportConfluenceURL"`
-		// Ид куда пишем данные
-		ReportConfluenceId string `json:"ReportConfluenceId"`
-		// Спейс конфлюенса
-		ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
-		ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
-		ReportConfluencePass  string `json:"ReportConfluencePass"`
-		ReportConfluenceToken string `json:"ReportConfluenceToken"`
-		ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
-	} `json:"Confluence"`
-	Allure struct {
+	ReportPath string         `json:"ReportPath"`
+	Confluence ConfluenceType `json:"Confluence"`
+	Allure     struct {
 		ReportAllure   bool   `json:"ReportAllure"`
 		ReportEndPoint string `json:"ReportEndPoint"`
 		Token          string `json:"Token"`
@@ -110,6 +98,21 @@ type Config struct {
 	GrafanadashTemplate []GrafanadashTemplateStruct `json:"GrafanadashTemplate"`
 }
 
+type ConfluenceType struct {
+	// Включение выкладнки на конфлюенс
+	ReportConfluenceOn bool `json:"ReportConfluenceOn"`
+	// Адрес конфлюенса
+	ReportConfluenceURL string `json:"ReportConfluenceURL"`
+	// Ид куда пишем данные
+	ReportConfluenceId string `json:"ReportConfluenceId"`
+	// Спейс конфлюенса
+	ReportConfluenceSpace string `json:"ReportConfluenceSpace"`
+	ReportConfluenceLogin string `json:"ReportConfluenceLogin"`
+	ReportConfluencePass  string `json:"ReportConfluencePass"`
+	ReportConfluenceToken string `json:"ReportConfluenceToken"`
+	ReportConfluenceProxy string `json:"ReportConfluenceProxy,omitempty"`
+}
+
 type GrafanaDashStruct struct {
 	Name string `json:"Name"`
 	// авторизация на графане
@@ -132,6 +135,8 @@ type GrafanaDashStruct struct {
 	UrlQuery string `json:"UrlQuery"`
 	// Tags
 	Tag string `json:"Tag"`
+	// AlertID
+	AlertID int `json:"AlertID"`
 	//группировка
 	UrlQueryGroup string `json:"UrlQueryGroup"`
 	Size          struct {
@@ -202,16 +207,7 @@ type LTError struct {
 	Type        string
 	Tag         string
 }
-
-// Структура сценария
-// Устарело, смотри ScenarioDinamic
-type Scenario struct {
-	Tags       string
-	Percentile float64
-	Maxlatency float64
-	Rate       float64
-	RateError  float64
-}
+type LTErrors []LTError
 
 // Структура с сценариев динамическим запросом
 type ScenarioDinamic struct {
@@ -219,6 +215,7 @@ type ScenarioDinamic struct {
 	NameThread string
 	Field      []YField
 }
+type ScenarioDinamics []ScenarioDinamic
 
 // сруктура для вывода графиков
 type LTGrag struct {
@@ -232,6 +229,7 @@ type LTGrag struct {
 		Height int
 	}
 }
+type LTGrags []LTGrag
 
 // Формирование списка для динамических шаблонов
 type DinamicRecord map[string]string
@@ -270,6 +268,11 @@ func (p *ScenarioDinamic) SeField(YF []YField) {
 	for _, i := range YF {
 		p.Field = append(p.Field, i)
 	}
+}
+
+func (lt *LTErrors) AddError(name string, threshold int, description string, percentile float64, tp, tag string) {
+	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ": Threshold " + strconv.Itoa(threshold) + " - current " + strconv.Itoa(int(percentile)), Type: tp, Tag: tag}
+	*lt = append(*lt, ltp)
 }
 
 func Helpstart() {
