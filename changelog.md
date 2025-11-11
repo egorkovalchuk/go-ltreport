@@ -39,3 +39,12 @@ fix convert strigns to UTF8
 ## Features
 Getting Alert data from Grafana
 Add Attachment for allure
+## Fix
+Fixed threshold type to float64
+# 0.6.0.1
+## Features
+A parameter defining the comparison type has been added to the threshold
+## Fix
+Added calculation of the 99th percentile if a vector of values ​​is received
+Added mandatory range for Prometheus([range])
+# 0.6.0.2

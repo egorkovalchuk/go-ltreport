@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
@@ -84,40 +87,74 @@ func (p *PrometheusClient) GetDataMean(query string) (PrometheusResponse, error)
 
 func (p *PrometheusClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
-	p.logs.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + query + p.Timeperiod)
-	prom, err := p.GetDataMean(query + p.Timeperiod)
+	p.logs.ProcessDebug("Get Prometheus threshold request: " + p.baseURL + "/api/v1/query?query=" + url.QueryEscape(p.PreparingRequest(query)) + p.Timeperiod)
+	prom, err := p.GetDataMean(url.QueryEscape(p.PreparingRequest(query)) + p.Timeperiod)
 	if err == nil {
-		percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
-		return percentile, nil
+		switch len(prom.Data.Result) {
+		case 0:
+			return 0, fmt.Errorf("prometheus: Expected exactly one series in result, got %d", len(prom.Data.Result))
+		case 1:
+			percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])
+			return percentile, nil
+		default:
+			percentile, err = p.get99thPercentile(prom)
+			p.logs.ProcessWarm("the vector of values is loaded, calculate the 99th percentile")
+			if err != nil {
+				return 0, err
+			}
+			return percentile, nil
+		}
 	} else {
 		return 0, err
 	}
 }
 
-func (p *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
+func (p *PrometheusClient) get99thPercentile(metrics PrometheusResponse) (float64, error) {
+
+	// Собираем все значения
+	var values []float64
+	for _, dp := range metrics.Data.Result {
+		if dp.Value[1] == nil {
+			continue
+		}
+		value := metrics.JsonPrometheusFiledParseFloat(dp.Value[1])
+		if !math.IsNaN(value) {
+			values = append(values, value)
+		}
+	}
+
+	if len(values) == 0 {
+		return 0, fmt.Errorf("influx: no valid data points found")
+	}
+
+	// Вычисляем 99-й персентиль
+	return CalculatePercentile(values, 99), nil
+}
+
+func (pr *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 
 	decoder := json.NewDecoder(resp.Body)
 	decoder.UseNumber()
 
-	err = decoder.Decode(&p)
+	err = decoder.Decode(&pr)
 
 	if err != nil {
 		return fmt.Errorf("PROMETEUS: %w", err)
 	}
 
-	if p.Status != "success" {
-		return fmt.Errorf("PROMETEUS: Expected exactly one result in response, got %s", p.Status)
+	if pr.Status != "success" {
+		return fmt.Errorf("PROMETEUS: Expected exactly one result in response, got %s", pr.Status)
 	}
 
-	if len(p.Data.Result) == 0 {
-		return fmt.Errorf("PROMETEUS: Expected exactly one series in result, got %d", len(p.Data.Result))
+	if len(pr.Data.Result) == 0 {
+		return fmt.Errorf("PROMETEUS: Expected exactly one series in result, got %d", len(pr.Data.Result))
 	}
 
 	return nil
 
 }
 
-func (p *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) SField {
+func (pr *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) SField {
 	var fieldp SField
 
 	if field == nil {
@@ -206,17 +243,30 @@ func (p *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) SField 
 	return fieldp
 }
 
-func (p *PrometheusResponse) JsonPrometheusFiledParseFloat(field interface{}) float64 {
-	fieldp := p.JsonPrometheusFiledParse(field)
+func (pr *PrometheusResponse) JsonPrometheusFiledParseFloat(field interface{}) float64 {
+	fieldp := pr.JsonPrometheusFiledParse(field)
 	return fieldp.ValFloat
 }
 
-func (p *PrometheusResponse) JsonPrometheusFiledParseInt(field interface{}) int64 {
-	fieldp := p.JsonPrometheusFiledParse(field)
+func (pr *PrometheusResponse) JsonPrometheusFiledParseInt(field interface{}) int64 {
+	fieldp := pr.JsonPrometheusFiledParse(field)
 	return fieldp.ValInt
 }
 
-func (p *PrometheusResponse) JsonPrometheusFiledParseString(field interface{}) string {
-	fieldp := p.JsonPrometheusFiledParse(field)
+func (pr *PrometheusResponse) JsonPrometheusFiledParseString(field interface{}) string {
+	fieldp := pr.JsonPrometheusFiledParse(field)
 	return fieldp.ValString
+}
+
+func (p *PrometheusClient) PreparingRequest(req string) string {
+	// Вычисляем диапозон
+	diff := p.end.Sub(p.start)
+	minutes := int(diff.Minutes())
+
+	// Компилируем регулярное выражение
+	re := regexp.MustCompile(`\[(\d+[a-z]{1})\]`)
+	result2 := re.ReplaceAllString(req, "["+fmt.Sprint(minutes)+"m]")
+
+	tmp := strings.Replace(result2, "[range]", "["+fmt.Sprint(minutes)+"m]", -1)
+	return tmp
 }

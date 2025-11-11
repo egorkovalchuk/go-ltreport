@@ -25,7 +25,7 @@ const (
 	//  логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.6.0.0"
+	versionutil  = "0.6.0.1"
 )
 
 var (
@@ -88,7 +88,10 @@ func main() {
 	flag.StringVar(&EndDateStr, "end", "", "End date of report generation in format 2006.01.31 15:00")
 	flag.Parse()
 
-	readconf(&cfg, confname)
+	err := cfg.Readconf(confname)
+	if err != nil {
+		logs.ProcessPanic(err)
+	}
 	//  Замена на приоритетный конфиг из командной строки
 	redefinitionconf()
 
@@ -124,7 +127,7 @@ func main() {
 	RemoveTemp()
 	if !bannotify {
 		logs.ProcessInfo("Start notification")
-		err := notify.SendMessageWithAttach("Report "+reportfilename, "Report for "+timeperiodstart.Format("01\\.02\\.2006 15:04:05")+"\\-"+timeperiodend.Format("15:04:05"), cfg.ReportPath+reportfilename+".pdf")
+		err := notify.SendMessageWithAttach(reportfilename, "Report for "+timeperiodstart.Format("01.02.2006 15:04:05")+"-"+timeperiodend.Format("15:04:05"), cfg.ReportPath+reportfilename+".pdf")
 		if err != nil {
 			logs.ProcessError(err)
 		}
@@ -224,7 +227,7 @@ func ReportInflux() {
 	logs.ProcessInfo("Load map threshold for tests ")
 	for _, j := range cfg.Jmeter.JmeterQueryThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: ""})
-		logs.ProcessDebug(j.Name + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
+		logs.ProcessDebug(j.Name + " threshold " + fmt.Sprint(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
 	// Формирование стека ошибок
@@ -242,8 +245,8 @@ func ReportInflux() {
 				// Если есть определяем порог
 				if valthershold, okk := JMeterTestTh[ii.NameTest][jj.Name]; okk {
 
-					if jj.Value > float64(valthershold.Value) {
-						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+					if jj.Value > valthershold.Value {
+						logs.ProcessDebug(ii.NameTest + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
 					}
 				}
@@ -256,8 +259,8 @@ func ReportInflux() {
 				// Проверяем, есть ли порог для теста ii.NameTest c полем jj.Name
 				// Если есть определяем порог
 				if valthershold, okk := JMeterTestTh["*"][jj.Name]; okk {
-					if jj.Value > float64(valthershold.Value) {
-						logs.ProcessDebug(ii.NameTest + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+					if jj.Value > valthershold.Value {
+						logs.ProcessDebug(ii.NameTest + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
 					}
 				}
@@ -325,7 +328,7 @@ func InfluxJmeterScenario() {
 	logs.ProcessInfo("Load map threshold for Scenario ")
 	for _, j := range cfg.Jmeter.JmeterQueryScnrThreshold {
 		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name+":"+j.NameThread, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: j.Statut})
-		logs.ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + strconv.Itoa(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
+		logs.ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + fmt.Sprint(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
 	for _, i := range infjson.Results[0].Series {
@@ -356,8 +359,8 @@ func InfluxJmeterScenario() {
 					// Если есть определяем порог
 					if valthershold, okk := JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name]; okk {
 
-						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
-							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
 					}
@@ -371,8 +374,8 @@ func InfluxJmeterScenario() {
 					// Если есть определяем порог
 					if valthershold, okk := JMeterTestTh["*:*"][jj.Name]; okk {
 
-						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
-							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
 					}
@@ -385,8 +388,8 @@ func InfluxJmeterScenario() {
 					// Если есть определяем порог
 					if valthershold, okk := JMeterTestTh[ii.NameTest+":*"][jj.Name]; okk {
 
-						if jj.Value > float64(valthershold.Value) && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
-							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + strconv.Itoa(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
+						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
+							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
 							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
 						}
 					}
@@ -470,26 +473,27 @@ func GrafanaReport() {
 			}
 
 			// Сохраняем данные в аллюр и проверяем сработку метрики
-			rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile)))
-			rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile))
+			rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile)))
+			rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile))
 
-			logs.ProcessDebug("Load threshold: " + fmt.Sprintf("%f", percentile))
-			if percentile > float64(i.Threshold) && err == nil {
+			logs.ProcessDebug(fmt.Sprintf("Load threshold: %f; value:%f", i.Threshold, percentile))
+			if ((percentile > i.Threshold && i.Comparison == ">") || (percentile < i.Threshold && i.Comparison == "<")) && err == nil {
 				Problems.AddError(i.Name, i.Threshold, i.ThDescription, percentile, "Grafana", rstallure.GetValueLabel("product"))
 				rstallure.FilishedFailed()
 			}
 		}
 		if i.AlertID > 0 {
 			logs.ProcessDebug("Alerts " + i.Name)
-			alert, err := gc.GetAlerts(i.AlertID)
+			alert, txt, err := gc.GetHistAlerts(i.AlertID)
 			if err != nil {
 				logs.ProcessError(err)
 				rstallure.AddStep("Checked alerts", "failed", timeperiodstart, timeperiodend)
 			} else {
 				rstallure.AddStep("Checked alerts", "passed", timeperiodstart, timeperiodend)
 				if alert {
-					Problems.AddError("Grafana alert: "+i.Name, 0, "описание", 0, "Alerts", rstallure.GetValueLabel("product"))
+					Problems.AddError("Grafana alert: "+i.Name, 0, txt, 0, "Alerts", rstallure.GetValueLabel("product"))
 					logs.ProcessInfo(fmt.Sprintf("The dashboard %s alert has been triggered.", i.Name))
+					rstallure.AddAttach("alert.txt", allure.Text, "", []byte(txt))
 					rstallure.FilishedFailed()
 				}
 			}
@@ -591,15 +595,15 @@ func GrafanaTemplateReport() {
 				}
 
 				// Сохраняем данные в аллюр и проверяем сработку метрики
-				rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile)))
-				rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%d;Value:%f", i.Threshold, percentile))
+				rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile)))
+				rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile))
 				// Создаем клиент
 				gc := reportdata.NewGrafanaClient(tmp_image, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 				defer gc.Close()
 				rstallure.AddLink("Grafana", tmp_dash+gc.Timeperiod, "requirement")
 
-				if percentile > float64(i.Threshold) && err == nil {
-					logs.ProcessDebug(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + strconv.Itoa(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
+				if percentile > i.Threshold && err == nil {
+					logs.ProcessInfo(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + fmt.Sprint(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
 					Problems.AddError(tmp_name, i.Threshold, i.ThDescription, percentile, "Grafana", line[1])
 
 					ConType, erri := gc.GetImage("tmp/", tmp_name)
@@ -666,7 +670,7 @@ func getThreshold(SourceType int, UrlQuery, AuthHeader, Query, UrlQueryGroup str
 	case 2:
 		//  получение данные из прометеуса
 		gcs := reportdata.NewPrometheusClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
-		percentile, err = gcs.GetThreshold(url.QueryEscape(Query + " " + UrlQueryGroup))
+		percentile, err = gcs.GetThreshold(Query + " " + UrlQueryGroup)
 		defer gcs.Close()
 	case 3:
 		gh := reportdata.NewGraphiteClient(UrlQuery, AuthHeader, logs, debugm)
@@ -675,7 +679,7 @@ func getThreshold(SourceType int, UrlQuery, AuthHeader, Query, UrlQueryGroup str
 	default:
 		//  получение данные из инфлюкса
 		gcs := reportdata.NewInfluxClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
-		percentile, err = gcs.GetThreshold(url.QueryEscape(Query + " AND " + gcs.Timeperiod + UrlQueryGroup))
+		percentile, err = gcs.GetThreshold(Query + " AND " + gcs.Timeperiod + UrlQueryGroup)
 		defer gcs.Close()
 	}
 	return percentile, err

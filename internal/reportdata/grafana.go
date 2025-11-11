@@ -113,7 +113,9 @@ type Alert struct {
 	} `json:"Settings"`
 }
 
-type Annotations []struct {
+type Annotations []Annotation
+
+type Annotation struct {
 	ID           int           `json:"id"`
 	AlertID      int           `json:"alertId"`
 	AlertName    string        `json:"alertName"`
@@ -133,6 +135,7 @@ type Annotations []struct {
 	Email        string        `json:"email"`
 	AvatarURL    string        `json:"avatarUrl"`
 	Data         struct {
+		EData EvalData
 	} `json:"data"`
 }
 
@@ -180,7 +183,7 @@ func (p *GrafanaClient) GetImage(path, Name string) (string, error) {
 
 	//  проверяем получение картинки, статус 200
 	if rsp.StatusCode == http.StatusOK {
-		p.logs.ProcessInfo("Request image success")
+		p.logs.ProcessDebug("Request image success " + Name)
 
 		var n io.Reader
 		// io.Copy(ioutil.Discard, rsp.Body)
@@ -212,39 +215,11 @@ func (p *GrafanaClient) GetImage(path, Name string) (string, error) {
 	return contentype, nil
 }
 
-func (p *GrafanaClient) GetAlerts(alertID int) (bool, error) {
+func (p *GrafanaClient) GetAlertStatus(alertID int) (bool, error) {
 
-	parsedURL, err := url.Parse(p.baseURL)
-	if err != nil {
-		return false, fmt.Errorf("GetAlerts error parsing %w", err)
-	}
-
-	url := fmt.Sprintf("%s://%s/api/alerts/%d", parsedURL.Scheme, parsedURL.Host, alertID)
-
-	resp, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return false, fmt.Errorf("GetAlerts error request %w", err)
-	}
-	resp.Header.Add("Authorization", p.auth)
-	resp.Header.Set("Content-Type", "application/json")
-	rsp, err := p.client.Do(resp)
+	tmp, err := p.GetAlert(alertID)
 
 	if err != nil {
-		return false, fmt.Errorf("GetAlerts error %w", err)
-	}
-
-	defer rsp.Body.Close()
-
-	if rsp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(rsp.Body)
-		return false, fmt.Errorf("API error: %s, body: %s", rsp.Status, string(body))
-	}
-
-	var tmp Alert
-	decoder := json.NewDecoder(rsp.Body)
-	err = decoder.Decode(&tmp)
-	if err != nil {
-		p.logs.ProcessDebug(rsp.Body)
 		return false, err
 	}
 
@@ -253,4 +228,120 @@ func (p *GrafanaClient) GetAlerts(alertID int) (bool, error) {
 	} else {
 		return false, nil
 	}
+}
+
+func (p *GrafanaClient) GetAlert(alertID int) (Alert, error) {
+	parsedURL, err := url.Parse(p.baseURL)
+	if err != nil {
+		return Alert{}, fmt.Errorf("GetAlerts error parsing %w", err)
+	}
+
+	url := fmt.Sprintf("%s://%s/api/alerts/%d", parsedURL.Scheme, parsedURL.Host, alertID)
+
+	resp, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return Alert{}, fmt.Errorf("GetAlerts error request %w", err)
+	}
+	resp.Header.Add("Authorization", p.auth)
+	resp.Header.Set("Content-Type", "application/json")
+	rsp, err := p.client.Do(resp)
+
+	if err != nil {
+		return Alert{}, fmt.Errorf("GetAlerts error %w", err)
+	}
+
+	defer rsp.Body.Close()
+
+	if rsp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(rsp.Body)
+		return Alert{}, fmt.Errorf("API error: %s, body: %s", rsp.Status, string(body))
+	}
+
+	var tmp Alert
+	decoder := json.NewDecoder(rsp.Body)
+	err = decoder.Decode(&tmp)
+	if err != nil {
+		p.logs.ProcessDebug(rsp.Body)
+		return Alert{}, err
+	}
+
+	return tmp, nil
+}
+
+func (p *GrafanaClient) GetHistAlerts(alertID int) (bool, string, error) {
+	if p.baseURL == "" {
+		return false, "", fmt.Errorf("grafana: base URL is empty")
+	}
+
+	u, err := url.Parse(p.baseURL)
+	if err != nil {
+		return false, "", fmt.Errorf("grafana: failed to parse base URL: %w", err)
+	}
+
+	gurl := u.Scheme + "://" + u.Host + "/api/annotations?type=alert" + p.Timeperiod
+
+	tmpalert, err := p.GetAlert(alertID)
+	if err != nil {
+		p.logs.ProcessError(err)
+	}
+
+	if tmpalert.DashboardID != 0 {
+		gurl += "&dashboardId=" + fmt.Sprint(tmpalert.DashboardID)
+	}
+	if tmpalert.PanelID != 0 {
+		gurl += "&panelId=" + fmt.Sprint(tmpalert.PanelID)
+	}
+
+	req, err := http.NewRequest("GET", gurl, nil)
+	if err != nil {
+		return false, "", fmt.Errorf("GetHistAlerts error request %w", err)
+	}
+	req.Header.Add("Authorization", p.auth)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := p.client.Do(req)
+
+	if err != nil {
+		return false, "", fmt.Errorf("GetHistAlerts error %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return false, "", fmt.Errorf("API error: %s, body: %s", resp.Status, string(body))
+	}
+
+	var tmp Annotations
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(&tmp)
+	if err != nil {
+		p.logs.ProcessDebug(resp.Body)
+		return false, "", err
+	}
+
+	var alerting bool
+	var txt string
+	for _, i := range tmp {
+		if i.AlertID == alertID && i.NewState == "alerting" {
+			alerting = true
+			txt += fmt.Sprintf("Date the alert was issued %s \n", convertUnixMillisToTime(i.Created).Format("15:04:05"))
+		}
+	}
+
+	return alerting, txt, nil
+}
+
+// Вспомогательная функция для получения первого непустого значения из списка ключей
+func getFirstNonEmpty(values url.Values, keys ...string) string {
+	for _, key := range keys {
+		if value := values.Get(key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func convertUnixMillisToTime(millis int64) time.Time {
+	// Unix time в миллисекундах -> время
+	return time.Unix(millis/1000, (millis%1000)*int64(time.Millisecond))
 }

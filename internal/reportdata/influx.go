@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -110,10 +111,22 @@ func (p *InfluxClient) Close() {
 
 func (p *InfluxClient) GetThreshold(query string) (float64, error) {
 	var percentile float64
-	metrics, err := p.GetDataMean(query)
+	metrics, err := p.GetDataMean(url.QueryEscape(query))
 	if err == nil {
-		percentile = p.JsonINfluxFiledParseFloat(metrics.Results[0].Series[0].Values[0][1])
-		return percentile, nil
+		switch len(metrics.Results[0].Series[0].Values[0]) {
+		case 0:
+			return 0, fmt.Errorf("influx: Expected exactly one series in result, got %d", len(metrics.Results[0].Series[0].Values[0]))
+		case 1:
+			percentile = p.JsonINfluxFiledParseFloat(metrics.Results[0].Series[0].Values[0][1])
+			return percentile, nil
+		default:
+			percentile, err = p.get99thPercentile(metrics)
+			p.logs.ProcessWarm("the vector of values is loaded, calculate the 99th percentile")
+			if err != nil {
+				return 0, err
+			}
+			return percentile, nil
+		}
 	} else {
 		return 0, err
 	}
@@ -122,7 +135,7 @@ func (p *InfluxClient) GetThreshold(query string) (float64, error) {
 func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 	resp_inf, err := http.NewRequest("GET", p.baseURL+""+query, nil)
 	if err != nil {
-		return Mean{}, fmt.Errorf("GetDataMean request failed: %w", err)
+		return Mean{}, fmt.Errorf("influx: GetDataMean request failed: %w", err)
 	}
 	if p.auth != "" {
 		resp_inf.Header.Add("Authorization", p.auth)
@@ -131,20 +144,20 @@ func (p *InfluxClient) GetDataMean(query string) (Mean, error) {
 
 	rsp_inf, err := p.client.Do(resp_inf)
 	if err != nil {
-		return Mean{}, fmt.Errorf("GetDataMean request failed: %w", err)
+		return Mean{}, fmt.Errorf("influx: GetDataMean request failed: %w", err)
 	}
 	defer rsp_inf.Body.Close()
 
 	if rsp_inf.StatusCode == http.StatusOK {
 		p.logs.ProcessInfo("Request Influx success")
-		infjson, err := JsonINfluxParse(rsp_inf)
+		infjson, err := p.JsonINfluxParse(rsp_inf)
 		if err == nil {
 			return infjson, nil
 		} else {
-			return Mean{}, fmt.Errorf("GetDataMean error parse: %w", err)
+			return Mean{}, fmt.Errorf("influx: GetDataMean error parse: %w", err)
 		}
 	} else {
-		return Mean{}, fmt.Errorf("influx API returned status %d: %s", rsp_inf.StatusCode, p.baseURL+query)
+		return Mean{}, fmt.Errorf("influx: API returned status %d: %s", rsp_inf.StatusCode, p.baseURL+query)
 	}
 }
 
@@ -156,17 +169,22 @@ func (p *InfluxClient) Get99thPercentile(query string) (float64, error) {
 	}
 
 	if len(metrics.Results) == 0 || len(metrics.Results[0].Series) == 0 {
-		return 0, fmt.Errorf("no metrics found for query %s", query)
+		return 0, fmt.Errorf("influx: no metrics found for query %s", query)
 	}
+
+	return p.get99thPercentile(metrics)
+}
+
+func (p *InfluxClient) get99thPercentile(metrics Mean) (float64, error) {
 
 	// Собираем все значения
 	var values []float64
 	for _, dp := range metrics.Results[0].Series {
 		for _, v := range dp.Values {
-			value, ok1 := v[1].(float64)
-			if !ok1 {
+			if v[1] == nil {
 				continue
 			}
+			value := p.JsonINfluxFiledParseFloat(v[1])
 			if !math.IsNaN(value) {
 				values = append(values, value)
 			}
@@ -174,7 +192,7 @@ func (p *InfluxClient) Get99thPercentile(query string) (float64, error) {
 	}
 
 	if len(values) == 0 {
-		return 0, fmt.Errorf("no valid data points found")
+		return 0, fmt.Errorf("influx: no valid data points found")
 	}
 
 	// Вычисляем 99-й персентиль
@@ -279,7 +297,7 @@ func (p *InfluxClient) JsonINfluxFiledParseInt(field interface{}) int64 {
 	return fieldp.ValInt
 }
 
-func JsonINfluxParse(resp *http.Response) (Mean, error) {
+func (p *InfluxClient) JsonINfluxParse(resp *http.Response) (Mean, error) {
 	var infjson Mean
 
 	decoder := json.NewDecoder(resp.Body)
@@ -288,11 +306,11 @@ func JsonINfluxParse(resp *http.Response) (Mean, error) {
 	err = decoder.Decode(&infjson)
 
 	if err != nil {
-		return infjson, fmt.Errorf("INFLUX: %w", err)
+		return infjson, fmt.Errorf("influx: %w", err)
 	}
 
 	if len(infjson.Results) == 0 || len(infjson.Results[0].Series) == 0 {
-		return infjson, fmt.Errorf("Expected exactly one result in response, got %d", len(infjson.Results))
+		return infjson, fmt.Errorf("influx: Expected exactly one result in response, got %d", len(infjson.Results))
 	}
 
 	return infjson, nil

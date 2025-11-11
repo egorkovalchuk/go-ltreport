@@ -1,7 +1,10 @@
 package reportdata
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strconv"
 )
 
@@ -72,7 +75,7 @@ type Config struct {
 			//Поле по которому смотрим пороги
 			ErrorField string `json:"ErrorField"`
 			//порог
-			Threshold int `json:"Threshold"`
+			Threshold float64 `json:"Threshold"`
 			//Описание порога
 			Description string `json:"Description"`
 		} `json:"JmeterQueryThreshold"`
@@ -89,7 +92,7 @@ type Config struct {
 			//Статус на Jmeter
 			Statut string `json:"Statut"`
 			//порог
-			Threshold int `json:"Threshold"`
+			Threshold float64 `json:"Threshold"`
 			//Описание порога
 			Description string `json:"Description"`
 		} `json:"JmeterQueryScnrThreshold"`
@@ -128,7 +131,9 @@ type GrafanaDashStruct struct {
 	//запрос данных для даша
 	Query string `json:"Query"`
 	//Порог для запроса
-	Threshold int `json:"Threshold"`
+	Threshold     float64
+	ThresholdDesc interface{} `json:"Threshold"`
+	Comparison    string
 	//Описание порога
 	ThDescription string `json:"ThDescription"`
 	//ссылка на запрос данных, смотреть в графане
@@ -160,7 +165,7 @@ type GrafanadashTemplateStruct struct {
 	// запрос данных для даша
 	Query string `json:"Query"`
 	// Порог для запроса
-	Threshold int `json:"Threshold"`
+	Threshold float64 `json:"Threshold"`
 	// Описание порога
 	ThDescription string `json:"ThDescription"`
 	// ссылка на запрос данных, смотреть в графане
@@ -192,7 +197,7 @@ type JmeterQScnrFieldS struct {
 // для сценариев, отличие в статусе сценария (Statut)
 type KeyField struct {
 	//порог
-	Value int
+	Value float64
 	//Описания порога
 	Description string
 	//Статус сценария на Jmeter
@@ -202,7 +207,7 @@ type KeyField struct {
 // сруктура ошибок для анализа
 type LTError struct {
 	Name        string
-	Threshold   int
+	Threshold   float64
 	Description string
 	Type        string
 	Tag         string
@@ -220,7 +225,7 @@ type ScenarioDinamics []ScenarioDinamic
 // сруктура для вывода графиков
 type LTGrag struct {
 	Name        string
-	Threshold   int
+	Threshold   float64
 	Description string
 	ContentType string
 	UrlDash     string
@@ -265,13 +270,11 @@ func (p *ScenarioDinamic) SetThread(NameThread string) {
 }
 
 func (p *ScenarioDinamic) SeField(YF []YField) {
-	for _, i := range YF {
-		p.Field = append(p.Field, i)
-	}
+	p.Field = append(p.Field, YF...)
 }
 
-func (lt *LTErrors) AddError(name string, threshold int, description string, percentile float64, tp, tag string) {
-	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ": Threshold " + strconv.Itoa(threshold) + " - current " + strconv.Itoa(int(percentile)), Type: tp, Tag: tag}
+func (lt *LTErrors) AddError(name string, threshold float64, description string, percentile float64, tp, tag string) {
+	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ": Threshold " + fmt.Sprint(threshold) + " - current " + strconv.Itoa(int(percentile)), Type: tp, Tag: tag}
 	*lt = append(*lt, ltp)
 }
 
@@ -284,4 +287,78 @@ func Helpstart() {
 	fmt.Println("Use -fsmpass start with Password FSM")
 	fmt.Println("Use -conflproxy start with proxy for connection to Confluence, example http://user:password@url:port")
 	fmt.Println("Use -start and -end for generate a report on an arbitrary date ")
+}
+
+// Чтение конфига
+func (cfg *Config) Readconf(confname string) error {
+	file, err := os.Open(confname)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for i, j := range cfg.Grafanadash {
+		th, com, err := cfg.parseThreshold(j.ThresholdDesc)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		cfg.Grafanadash[i].Threshold = th
+		cfg.Grafanadash[i].Comparison = com
+	}
+	file.Close()
+	return nil
+}
+
+func (cfg *Config) parseThreshold(in interface{}) (th float64, com string, err error) {
+
+	switch v := in.(type) {
+	case string:
+
+		Pattern := `([<>]?)(\d+)`
+
+		re, err := regexp.Compile(Pattern)
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid regex pattern: %w", err)
+		}
+
+		matches := re.FindStringSubmatch(v)
+		if matches == nil {
+			return 0, "", fmt.Errorf("invalid  format: %s", v)
+		}
+
+		if len(matches) > 1 {
+			if matches[1] != "" {
+				com = matches[1]
+			} else {
+				com = ">"
+			}
+		}
+		if len(matches) > 2 && matches[2] != "" {
+			tmp, err := strconv.ParseFloat(matches[2], 64)
+			th = tmp
+			if err != nil {
+				return 0, "", fmt.Errorf("invalid convert threshold: %s", v)
+			}
+		}
+	case int:
+		th = float64(v)
+		com = ">"
+	case float64:
+		th = v
+		com = ">"
+	default:
+		th = 0
+		com = ""
+	}
+
+	return th, com, nil
 }

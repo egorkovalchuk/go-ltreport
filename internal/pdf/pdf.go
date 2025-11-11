@@ -686,7 +686,7 @@ func (p *PDFWriter) ReportDownload() string {
 	if err != nil {
 		p.logs.ProcessError("Error connection to confluence")
 		p.logs.ProcessError(err)
-		return allurelink
+		return ""
 	}
 	// Получение описание базовой страницы
 	p.logs.ProcessDebug("GetContent")
@@ -694,14 +694,14 @@ func (p *PDFWriter) ReportDownload() string {
 	if err != nil {
 		p.logs.ProcessError(err)
 		p.logs.ProcessError(JsonCont)
-		return allurelink
+		return ""
 	}
 	p.logs.ProcessDebug("GetContentChildPage")
 	JsonConC, err := confl.GetContentChildPage(p.confcfg.ReportConfluenceId, confluence.ContentQuery{SpaceKey: p.confcfg.ReportConfluenceSpace, Limit: 250, Expand: []string{"children.page"}}, p.logs.ProcessLog)
 	if err != nil {
 		p.logs.ProcessError(err)
 		p.logs.ProcessError(JsonConC)
-		return allurelink
+		return ""
 	}
 
 	currentTime := time.Now()

@@ -65,7 +65,7 @@ func EnsureTrailingSeparator(path string) string {
 func RemoveTrailingSeparator(path string) string {
 	if HasTrailingSeparator(path) {
 		// Удаляем все trailing separators
-		return strings.TrimRight(path, string(filepath.Separator)+"/")
+		return strings.TrimRight(path, string(filepath.Separator))
 	}
 	return path
 }
