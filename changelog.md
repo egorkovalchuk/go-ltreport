@@ -48,3 +48,5 @@ A parameter defining the comparison type has been added to the threshold
 Added calculation of the 99th percentile if a vector of values ​​is received
 Added mandatory range for Prometheus([range])
 # 0.6.0.2
+## Features
+Added MakeFile

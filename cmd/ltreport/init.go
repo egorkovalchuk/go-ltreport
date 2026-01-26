@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -74,25 +73,6 @@ func DateProcess() bool {
 		}
 	}
 	return true
-}
-
-// Чтение конфига
-func readconf(cfg *reportdata.Config, confname string) {
-	file, err := os.Open(confname)
-	if err != nil {
-		logs.ProcessPanic(err)
-		fmt.Println(err)
-	}
-	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&cfg)
-	if err != nil {
-		logs.ProcessPanic(err)
-		fmt.Println(err)
-	}
-
-	file.Close()
 }
 
 func redefinitionconf() {

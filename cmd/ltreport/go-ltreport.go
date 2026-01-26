@@ -25,7 +25,7 @@ const (
 	//  логи
 	logFileName  = "ltreport.log"
 	confFileName = "config.json"
-	versionutil  = "0.6.0.1"
+	versionutil  = "0.6.0.2"
 )
 
 var (
@@ -34,14 +34,10 @@ var (
 	bannotify bool
 	// режим работы сервиса(дебаг мод)
 	debugm bool
-	// запрос помощи
-	help bool
 	// по часовой отчет за прошедший час
 	hour bool
 	//  Delete temp files
 	rmtmpfile bool
-	// запрос версии
-	version bool
 	// Переменная для тестов
 	LTTest_dinamic reportdata.LTTestDinamics
 	// Переменная для анализа
@@ -61,15 +57,7 @@ var (
 func main() {
 
 	// start program
-	//  запуск горутины записи в лог
-	loggerOnce.Do(func() {
-		logs = logger.NewLogWriter(logFileName, debugm)
-		go logs.LogWriteForGoRutineStruct()
-	})
-
-	logs.ProcessInfo("- - - - - - - - - - - - - - -")
-	logs.ProcessInfo("Start report")
-
+	var version, help bool
 	flag.BoolVar(&debugm, "d", false, "Start debug mode")
 	flag.BoolVar(&version, "v", false, "Version")
 	var confname string
@@ -88,6 +76,27 @@ func main() {
 	flag.StringVar(&EndDateStr, "end", "", "End date of report generation in format 2006.01.31 15:00")
 	flag.Parse()
 
+	//  Получение помощи
+	if help {
+		reportdata.Helpstart()
+		return
+	}
+
+	//  получение версии
+	if version {
+		fmt.Println("Version utils " + versionutil)
+		return
+	}
+
+	// запуск горутины записи в лог
+	loggerOnce.Do(func() {
+		logs = logger.NewLogWriter(logFileName, debugm)
+		go logs.LogWriteForGoRutineStruct()
+	})
+
+	logs.ProcessInfo("- - - - - - - - - - - - - - -")
+	logs.ProcessInfo("Start report")
+
 	err := cfg.Readconf(confname)
 	if err != nil {
 		logs.ProcessPanic(err)
@@ -104,18 +113,6 @@ func main() {
 
 	InitTime()
 	createOutputDir("tmp/")
-
-	//  Получение помощи
-	if help {
-		reportdata.Helpstart()
-		return
-	}
-
-	//  получение версии
-	if version {
-		fmt.Println("Version utils " + versionutil)
-		return
-	}
 
 	//  Проверка по датам
 	if !DateProcess() {
