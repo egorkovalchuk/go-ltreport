@@ -1,12 +1,9 @@
-Here is the complete, professional English version of your documentation. You can use this text to update your main README.md file while keeping the Russian text for readme.ru.md.
-------------------------------
-
 # Load Test Report (go-ltreport)
 A Go-based utility designed to automate load testing results analysis and summary report generation.
 
 This tool helps developers, QA engineers, and DevOps specialists quickly transform raw metrics from various data sources into structured PDF reports, or automatically publish them directly to Confluence pages and Allure TestOps.
 
----## 🚀 Key Features
+## 🚀 Key Features
 - **Multi-Platform Metrics Collection:** Native integration with InfluxDB (JMeter), Grafana, ClickHouse, Prometheus, Graphite, and HP Service Manager (HPSM).
 - **Smart Threshold Analysis:** Automatic metrics analysis against predefined threshold values for the entire test scope as well as individual scenarios/transactions.
 - **Visual PDF Reports:** Generates comprehensive documents containing interactive tables, incident logs, and embedded Grafana panel charts (screenshots).
@@ -14,7 +11,7 @@ This tool helps developers, QA engineers, and DevOps specialists quickly transfo
 - **Confluence Automation:** Automatically uploads generated reports to target Confluence directories as child pages with the PDF report attached.
 - **Allure Framework Integration:** Exports individual threshold check results to Allure as test cases mapped to `passed`, `failed`, or `broken` statuses.
 
----## 📐 Project & Codebase Architecture
+## 📐 Project & Codebase Architecture
 The project codebase is organized following idiomatic **Standard Go Project Layout** patterns:
 
 * **`cmd/ltreport/`** — Application entry point. Contains `go-ltreport.go`, which handles CLI flags parsing, logging/configuration initialization, and fires up the main application engine.
@@ -26,7 +23,7 @@ The project codebase is organized following idiomatic **Standard Go Project Layo
   * `internal/hpsm/` — Integration client for fetching incidents from HP Service Manager.
 * **`example/`** — Configuration templates and mock data sets to help you get started quickly.
 
----## 🔄 Workflow Pipeline
+## 🔄 Workflow Pipeline
 Upon execution, the utility runs a sequential data collection and processing pipeline:
 
 
