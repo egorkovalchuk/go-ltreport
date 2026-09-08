@@ -1,4 +1,4 @@
-package reportdata
+package telegraf
 
 import (
 	"fmt"
@@ -7,16 +7,8 @@ import (
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/prometheus"
 )
-
-// TelegrafClient представляет клиент для работы
-type TelegrafClient struct {
-	baseURL string
-	auth    string
-	client  *http.Client
-	logFunc *logger.LogWriter
-	debug   bool
-}
 
 // NewTelegrafClient создает новый экземпляр клиента
 func NewTelegrafClient(baseURL string, auth string, logFunc *logger.LogWriter, debug bool) *TelegrafClient {
@@ -52,7 +44,7 @@ func (p *TelegrafClient) GetDataSourceThreshold(query string) (float64, error) {
 	if rsp_inf.StatusCode == http.StatusOK {
 		p.logFunc.ProcessInfo("Request prometheus threshold success")
 
-		var prom PrometheusResponse
+		var prom prometheus.PrometheusResponse
 		err = prom.JsonPrometheusParse(rsp_inf)
 		if err == nil {
 			percentile = prom.JsonPrometheusFiledParseFloat(prom.Data.Result[0].Value[1])

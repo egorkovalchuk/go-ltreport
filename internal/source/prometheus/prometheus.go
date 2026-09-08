@@ -1,4 +1,4 @@
-package reportdata
+package prometheus
 
 import (
 	"encoding/json"
@@ -12,33 +12,9 @@ import (
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/influx"
 )
-
-type PrometheusResponse struct {
-	Status    string `json:"status"`
-	IsPartial bool   `json:"isPartial"`
-	Data      struct {
-		ResultType string `json:"resultType"`
-		Result     []struct {
-			Metric struct {
-				Host string `json:"host"`
-			} `json:"metric"`
-			Value []interface{} `json:"value"`
-		} `json:"result"`
-	} `json:"data"`
-}
-
-// PrometheusClient представляет клиент для работы
-type PrometheusClient struct {
-	baseURL    string
-	auth       string
-	client     *http.Client
-	logs       *logger.LogWriter
-	debug      bool
-	start      time.Time
-	end        time.Time
-	Timeperiod string
-}
 
 // NewPrometheusClient создает новый экземпляр клиента
 func NewPrometheusClient(baseURL string, auth string, start, end time.Time, logs *logger.LogWriter, debug bool) *PrometheusClient {
@@ -128,7 +104,7 @@ func (p *PrometheusClient) get99thPercentile(metrics PrometheusResponse) (float6
 	}
 
 	// Вычисляем 99-й персентиль
-	return CalculatePercentile(values, 99), nil
+	return reportdata.CalculatePercentile(values, 99), nil
 }
 
 func (pr *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
@@ -136,7 +112,7 @@ func (pr *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 	decoder := json.NewDecoder(resp.Body)
 	decoder.UseNumber()
 
-	err = decoder.Decode(&pr)
+	err := decoder.Decode(&pr)
 
 	if err != nil {
 		return fmt.Errorf("PROMETEUS: %w", err)
@@ -154,8 +130,8 @@ func (pr *PrometheusResponse) JsonPrometheusParse(resp *http.Response) error {
 
 }
 
-func (pr *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) SField {
-	var fieldp SField
+func (pr *PrometheusResponse) JsonPrometheusFiledParse(field interface{}) influx.SField {
+	var fieldp influx.SField
 
 	if field == nil {
 		return fieldp // все поля SField уже инициализированы нулевыми значениями

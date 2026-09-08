@@ -11,6 +11,8 @@ import (
 	"github.com/egorkovalchuk/go-ltreport/internal/hpsm"
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/clickhouse"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/influx"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -265,7 +267,7 @@ func (p *PDFWriter) ReportProblemScenPDF(Problems []reportdata.LTError) {
 		p.pdf.SetXY(saveX, saveY+rowHeight)
 	}
 }
-func (p *PDFWriter) ReportInfluxPDF(LTTest_dinamic []reportdata.LTTestDinamic) {
+func (p *PDFWriter) ReportInfluxPDF(LTTest_dinamic []influx.LTTestDinamic) {
 	p.logs.ProcessDebug("Start generate pdf - Influx JMeter")
 	p.pdf.AddPage()
 
@@ -296,7 +298,7 @@ func (p *PDFWriter) ReportInfluxPDF(LTTest_dinamic []reportdata.LTTestDinamic) {
 
 }
 
-func (p *PDFWriter) ReportInfluxScrnPDF(LTScen_dimanict map[string]map[string]reportdata.ScenarioDinamic) {
+func (p *PDFWriter) ReportInfluxScrnPDF(LTScen_dimanict map[string]map[string]influx.ScenarioDinamic) {
 	p.logs.ProcessDebug("Start generate pdf - Influx Scenario Jmeter")
 	p.pdf.AddPage()
 	p.pdf.SetY(p.pdf.GetY() + 10)
@@ -319,7 +321,7 @@ func (p *PDFWriter) ReportInfluxScrnPDF(LTScen_dimanict map[string]map[string]re
 			p.pdf.CellFormat(195, 7, i.NameTest+":"+i.NameThread, "0", 0, "CM", false, 0, "")
 			p.pdf.SetY(p.pdf.GetY() + 6)
 
-			scenariopdf := make(map[string][]reportdata.YField)
+			scenariopdf := make(map[string][]influx.YField)
 			// Для красивого вывода в отчет
 			for _, ii := range i.Field {
 				scenariopdf[ii.Statut] = append(scenariopdf[ii.Statut], ii)
@@ -426,7 +428,7 @@ func (p *PDFWriter) GrafanaReportPDF(LTGrafs []reportdata.LTGrag) {
 	}
 }
 
-func (p *PDFWriter) ClickHouseReportPDF(LTClickHouse []reportdata.ClickHouseJson) {
+func (p *PDFWriter) ClickHouseReportPDF(LTClickHouse []clickhouse.ClickHouseJson) {
 	p.logs.ProcessDebug("Start generate pdf - ClickHouse")
 
 	p.pdf.AddPage()

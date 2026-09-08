@@ -1,4 +1,4 @@
-package reportdata
+package influx
 
 import (
 	"encoding/json"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
 
 var (
@@ -18,78 +19,6 @@ var (
 	LogFlag   = false
 	err       error
 )
-
-// структура influx type 1
-type Mean struct {
-	Results []struct {
-		StatementID int `json:"statement_id"`
-		Series      []struct {
-			Name string `json:"name"`
-			Tags struct {
-				Transaction string `json:"transaction"`
-				Suite       string `json:"suite"`
-				Statut      string `json:"statut"`
-				Application string `json:"application"`
-			} `json:"tags"`
-			Columns []string        `json:"columns"`
-			Values  [][]interface{} `json:"values"`
-		} `json:"series"`
-	} `json:"results"`
-}
-
-// структура influx type 2 для сценария
-type MeanScenario struct {
-	Results []struct {
-		StatementID int `json:"statement_id"`
-		Series      []struct {
-			Name string `json:"name"`
-			Tags struct {
-				Transaction string `json:"transaction"`
-				Suite       string `json:"suite"`
-				Statut      string `json:"statut"`
-				Application string `json:"application"`
-			} `json:"tags"`
-			Columns []string        `json:"columns"`
-			Values  [][]interface{} `json:"values"`
-		} `json:"series"`
-	} `json:"results"`
-}
-
-// для преобразования типа ответа инфлюкса
-type SField struct {
-	NameCol   string
-	ValFloat  float64
-	ValInt    int64
-	ValString string
-	ValTime   int64
-}
-
-// Структруа ответа инфлюкса по тестам
-type LTTestDinamic struct {
-	NameTest string
-	Field    []YField
-}
-type LTTestDinamics []LTTestDinamic
-
-// для хранения поля ответа
-type YField struct {
-	Name        string
-	Value       float64
-	Description string
-	Statut      string
-}
-
-// InfluxClient представляет клиент для работы
-type InfluxClient struct {
-	baseURL    string
-	auth       string
-	client     *http.Client
-	logs       *logger.LogWriter
-	debug      bool
-	start      time.Time
-	end        time.Time
-	Timeperiod string
-}
 
 // NewPrometheusClient создает новый экземпляр клиента
 func NewInfluxClient(baseURL string, auth string, start, end time.Time, logs *logger.LogWriter, debug bool) *InfluxClient {
@@ -196,7 +125,7 @@ func (p *InfluxClient) get99thPercentile(metrics Mean) (float64, error) {
 	}
 
 	// Вычисляем 99-й персентиль
-	return CalculatePercentile(values, 99), nil
+	return reportdata.CalculatePercentile(values, 99), nil
 }
 
 func (p *InfluxClient) JsonINfluxFiledParse(field interface{}) SField {
@@ -316,7 +245,7 @@ func (p *InfluxClient) JsonINfluxParse(resp *http.Response) (Mean, error) {
 	return infjson, nil
 }
 
-func (p *InfluxClient) InfluxJmeterScenarioStatut(i [][]interface{}, statut string, cfg []JmeterQScnrFieldS) []YField {
+func (p *InfluxClient) InfluxJmeterScenarioStatut(i [][]interface{}, statut string, cfg []reportdata.JmeterQScnrFieldS) []YField {
 
 	var LTTest_yfield []YField
 	var LTTest_yfieldtmp YField

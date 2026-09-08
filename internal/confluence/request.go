@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -28,7 +27,7 @@ func (confl *API) Request(req *http.Request, f func(level string, logtext interf
 		return nil, err
 	}
 
-	res, err := ioutil.ReadAll(resp.Body)
+	res, err := io.ReadAll(resp.Body)
 	if err != nil {
 		f("ERROR: HTTP:", string(res))
 		return nil, err

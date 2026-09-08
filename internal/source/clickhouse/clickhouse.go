@@ -1,52 +1,16 @@
-package reportdata
+package clickhouse
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
-
-// Result of Query.
-type Result interface {
-	//	DecodeResult(r *Reader, version int, b Block) error
-}
-
-type MetaStruct struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-	Len  int
-}
-type ClickHouseJson struct {
-	ColunmLen int
-	Name      string
-	Meta      []MetaStruct `json:"meta"`
-	Data      []map[string]interface {
-	} `json:"data"`
-	Rows       int `json:"rows"`
-	Statistics struct {
-		Elapsed    float32 `json:"elapsed"`
-		Rows_read  float32 `json:"rows_read"`
-		Bytes_read float32 `json:"bytes_read"`
-	} `json:"statistics"`
-}
-
-// CHClient представляет клиент для работы с Grafana
-type CHClient struct {
-	baseURL    string
-	user       string
-	pass       string
-	client     *http.Client
-	logs       *logger.LogWriter
-	debug      bool
-	start      time.Time
-	end        time.Time
-	Timeperiod string
-}
 
 // NewCHClient создает новый экземпляр клиента
 func NewCHClient(baseURL string, user string, pass string, start, end time.Time, logs *logger.LogWriter, debug bool) *CHClient {
@@ -76,7 +40,7 @@ func (p *CHClient) GetSql(DBname string, sql string, name string) (ClickHouseJso
 	resp.Header.Add("X-ClickHouse-Progress", "1")
 	resp.Header.Add("X-ClickHouse-Database", DBname)
 	resp.Header.Add("User-Agent", "go-LT-Report")
-	resp.Body = ioutil.NopCloser(strings.NewReader(strings.Replace(sql, "{timestamp}", p.Timeperiod, 1) + " FORMAT JSONStrings"))
+	resp.Body = io.NopCloser(strings.NewReader(strings.Replace(sql, "{timestamp}", p.Timeperiod, 1) + " FORMAT JSONStrings"))
 
 	rsp, err := p.client.Do(resp)
 	if err != nil {
@@ -113,7 +77,7 @@ func (p *ClickHouseJson) JsonClickHouseParse(resp *http.Response, name string) e
 	decoder := json.NewDecoder(resp.Body)
 	decoder.UseNumber()
 
-	err = decoder.Decode(&p)
+	err := decoder.Decode(&p)
 
 	if err != nil {
 		return fmt.Errorf("CH: %w", err)
@@ -123,9 +87,9 @@ func (p *ClickHouseJson) JsonClickHouseParse(resp *http.Response, name string) e
 
 	for _, i := range p.Meta {
 		for _, j := range p.Data {
-			i.Len = MaxInt(len(j[i.Name].(string)), i.Len)
+			i.Len = reportdata.MaxInt(len(j[i.Name].(string)), i.Len)
 		}
-		i.Len = MaxInt(len(i.Name), i.Len)
+		i.Len = reportdata.MaxInt(len(i.Name), i.Len)
 		tmp = append(tmp, MetaStruct{Name: i.Name, Type: i.Type, Len: i.Len})
 	}
 
@@ -153,7 +117,7 @@ func (p *ClickHouseJson) Lens() map[string]int {
 	for _, m := range p.Data {
 		for key, value := range tmplen {
 
-			tmplen[key] = MaxInt(len(m[key].(string)), value)
+			tmplen[key] = reportdata.MaxInt(len(m[key].(string)), value)
 
 			var strValue string
 			switch v := m[key].(type) {
@@ -179,8 +143,8 @@ func (p *ClickHouseJson) Lens() map[string]int {
 func (p *ClickHouseJson) RoundToPrecision(precision int) {
 	for i, m := range p.Data {
 		for key, value := range m {
-			if num, ok := ConvIntefaceFloat64(value); ok {
-				p.Data[i][key] = fmt.Sprint(RoundToPrecision(num, 4))
+			if num, ok := reportdata.ConvIntefaceFloat64(value); ok {
+				p.Data[i][key] = fmt.Sprint(reportdata.RoundToPrecision(num, 4))
 			}
 		}
 	}

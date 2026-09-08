@@ -105,7 +105,7 @@ func ConvertEncoding(text []byte) (string, error) {
 			}
 			return string(result), nil
 		} else {
-			return "", err
+			return "", fmt.Errorf("Unknown charmap")
 		}
 	} else {
 		return string(text), nil

@@ -17,6 +17,11 @@ import (
 	"github.com/egorkovalchuk/go-ltreport/internal/notify"
 	"github.com/egorkovalchuk/go-ltreport/internal/pdf"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/clickhouse"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/grafana"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/graphite"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/influx"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/prometheus"
 	"github.com/google/uuid"
 )
 
@@ -39,11 +44,11 @@ var (
 	//  Delete temp files
 	rmtmpfile bool
 	// Переменная для тестов
-	LTTest_dinamic reportdata.LTTestDinamics
+	LTTest_dinamic influx.LTTestDinamics
 	// Переменная для анализа
 	Problems reportdata.LTErrors
 	// Сценарии
-	LTScen_dimanict map[string]map[string]reportdata.ScenarioDinamic
+	LTScen_dimanict map[string]map[string]influx.ScenarioDinamic
 	// Массив графиков и порогов
 	LTGrafs reportdata.LTGrags
 	// Аварии
@@ -51,7 +56,7 @@ var (
 	// allure
 	alluretmp *allure.Allure
 	// Массив для ClickHouse
-	LTClickHouse []reportdata.ClickHouseJson
+	LTClickHouse []clickhouse.ClickHouseJson
 )
 
 func main() {
@@ -217,13 +222,13 @@ func ReportInflux() {
 	// Получение данных из инфлюкса jmeter
 	InfluxErrorJmeter()
 
-	var JMeterTestTh map[string]map[string]reportdata.KeyField
-	JMeterTestTh = make(map[string]map[string]reportdata.KeyField)
+	var JMeterTestTh map[string]map[string]influx.KeyField
+	JMeterTestTh = make(map[string]map[string]influx.KeyField)
 
 	// Построение карты порогов
 	logs.ProcessInfo("Load map threshold for tests ")
 	for _, j := range cfg.Jmeter.JmeterQueryThreshold {
-		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: ""})
+		JMeterTestTh = influx.AddMap(JMeterTestTh, j.Name, j.ErrorField, influx.KeyField{Value: j.Threshold, Description: j.Description, Statut: ""})
 		logs.ProcessDebug(j.Name + " threshold " + fmt.Sprint(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
@@ -269,7 +274,7 @@ func ReportInflux() {
 func InfluxErrorJmeter() {
 
 	logs.ProcessInfo("Load Jmeter delta")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
+	gc := influx.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQuery + " " + gc.Timeperiod + " " + cfg.Jmeter.JmeterQueryGroup))
 
 	if err != nil {
@@ -282,9 +287,9 @@ func InfluxErrorJmeter() {
 
 		logs.ProcessInfo("Test " + i.Tags.Suite + " load")
 
-		var LTTest_yfield []reportdata.YField
-		var LTTest_dinamictmp reportdata.LTTestDinamic
-		var LTTest_yfieldtmp reportdata.YField
+		var LTTest_yfield []influx.YField
+		var LTTest_dinamictmp influx.LTTestDinamic
+		var LTTest_yfieldtmp influx.YField
 
 		LTTest_dinamictmp.NameTest = i.Tags.Suite
 
@@ -308,7 +313,7 @@ func InfluxErrorJmeter() {
 func InfluxJmeterScenario() {
 
 	logs.ProcessInfo("Jmeter Scenario")
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
+	gc := influx.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", timeperiodstart, timeperiodend, logs, debugm)
 	infjson, err := gc.GetDataMean(url.QueryEscape(cfg.Jmeter.JmeterQueryScenario + gc.Timeperiod + cfg.Jmeter.JmeterQueryScnrGroup))
 
 	if err != nil {
@@ -316,15 +321,15 @@ func InfluxJmeterScenario() {
 		logs.ProcessError(err)
 		return
 	}
-	var JMeterTestTh map[string]map[string]reportdata.KeyField
-	JMeterTestTh = make(map[string]map[string]reportdata.KeyField)
+	var JMeterTestTh map[string]map[string]influx.KeyField
+	JMeterTestTh = make(map[string]map[string]influx.KeyField)
 
-	LTScen_dimanict = make(map[string]map[string]reportdata.ScenarioDinamic)
+	LTScen_dimanict = make(map[string]map[string]influx.ScenarioDinamic)
 
 	// Построение карты порогов
 	logs.ProcessInfo("Load map threshold for Scenario ")
 	for _, j := range cfg.Jmeter.JmeterQueryScnrThreshold {
-		JMeterTestTh = reportdata.AddMap(JMeterTestTh, j.Name+":"+j.NameThread, j.ErrorField, reportdata.KeyField{Value: j.Threshold, Description: j.Description, Statut: j.Statut})
+		JMeterTestTh = influx.AddMap(JMeterTestTh, j.Name+":"+j.NameThread, j.ErrorField, influx.KeyField{Value: j.Threshold, Description: j.Description, Statut: j.Statut})
 		logs.ProcessDebug(j.Name + ":" + j.NameThread + " threshold " + fmt.Sprint(JMeterTestTh[j.Name][j.ErrorField].Value) + " for field " + j.ErrorField)
 	}
 
@@ -337,7 +342,7 @@ func InfluxJmeterScenario() {
 			LTScenTmpt.SetApplication(i.Tags.Application)
 			LTScenTmpt.SetThread(i.Tags.Transaction)
 			LTScenTmpt.SeField(gc.InfluxJmeterScenarioStatut(i.Values, i.Tags.Statut, cfg.Jmeter.JmeterQueryScnrField))
-			LTScen_dimanict = reportdata.AddMapS(LTScen_dimanict, i.Tags.Application, i.Tags.Transaction, LTScenTmpt)
+			LTScen_dimanict = influx.AddMapS(LTScen_dimanict, i.Tags.Application, i.Tags.Transaction, LTScenTmpt)
 		}
 
 	}
@@ -405,7 +410,7 @@ func GrafanaReport() {
 		logs.ProcessInfo("Load grafana " + i.Name)
 
 		// получение картинки
-		gc := reportdata.NewGrafanaClient(i.Urlimg, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		gc := grafana.NewGrafanaClient(i.Urlimg, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 		logs.ProcessDebug("Get image request " + i.Urlimg + gc.Timeperiod)
 		ConType, err := gc.GetImage("tmp/", i.Name)
 		defer gc.Close()
@@ -426,7 +431,7 @@ func GrafanaReport() {
 
 		i.ThDescription = convertEncoding(i.ThDescription, "Error convert for dash"+i.Name)
 
-		if i.Query == "" && i.AlertID == 0 {
+		if i.Query == "" && i.AlertID != nil {
 			logs.ProcessWarm("Thresholds are not set for " + i.Name)
 			continue
 		}
@@ -479,7 +484,7 @@ func GrafanaReport() {
 				rstallure.FilishedFailed()
 			}
 		}
-		if i.AlertID > 0 {
+		if i.AlertID != nil {
 			logs.ProcessDebug("Alerts " + i.Name)
 			alert, txt, err := gc.GetHistAlerts(i.AlertID)
 			if err != nil {
@@ -595,7 +600,7 @@ func GrafanaTemplateReport() {
 				rstallure.AddStepWithParam("Checked threshold", statusstep, timeperiodstart, timeperiodend, rstallure.ArrayToParam(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile)))
 				rstallure.ArrayToParamRoot(fmt.Sprintf("Threshold:%f;Value:%f", i.Threshold, percentile))
 				// Создаем клиент
-				gc := reportdata.NewGrafanaClient(tmp_image, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+				gc := grafana.NewGrafanaClient(tmp_image, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 				defer gc.Close()
 				rstallure.AddLink("Grafana", tmp_dash+gc.Timeperiod, "requirement")
 
@@ -641,7 +646,7 @@ func GrafanaTemplateReport() {
 func ClickHouseReport() {
 	logs.ProcessInfo("Start load ClickHouse")
 
-	ch := reportdata.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, timeperiodstart, timeperiodend, logs, debugm)
+	ch := clickhouse.NewCHClient("http://"+cfg.ClickHouse.Server+"/?", cfg.ClickHouse.User, cfg.ClickHouse.Pass, timeperiodstart, timeperiodend, logs, debugm)
 	for _, i := range cfg.ClickHouse.Query {
 		clkhouse, err := ch.GetSql(i.DBname, i.Sql, i.Name)
 		if err == nil {
@@ -666,16 +671,16 @@ func getThreshold(SourceType int, UrlQuery, AuthHeader, Query, UrlQueryGroup str
 	switch SourceType {
 	case 2:
 		//  получение данные из прометеуса
-		gcs := reportdata.NewPrometheusClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		gcs := prometheus.NewPrometheusClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 		percentile, err = gcs.GetThreshold(Query + " " + UrlQueryGroup)
 		defer gcs.Close()
 	case 3:
-		gh := reportdata.NewGraphiteClient(UrlQuery, AuthHeader, logs, debugm)
+		gh := graphite.NewGraphiteClient(UrlQuery, AuthHeader, logs, debugm)
 		percentile, err = gh.Get99thPercentile(Query, timeperiodstart, timeperiodend)
 		defer gh.Close()
 	default:
 		//  получение данные из инфлюкса
-		gcs := reportdata.NewInfluxClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
+		gcs := influx.NewInfluxClient(UrlQuery, AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 		percentile, err = gcs.GetThreshold(Query + " AND " + gcs.Timeperiod + UrlQueryGroup)
 		defer gcs.Close()
 	}

@@ -141,7 +141,7 @@ type GrafanaDashStruct struct {
 	// Tags
 	Tag string `json:"Tag"`
 	// AlertID
-	AlertID int `json:"AlertID"`
+	AlertID any `json:"AlertID"`
 	//группировка
 	UrlQueryGroup string `json:"UrlQueryGroup"`
 	Size          struct {
@@ -193,17 +193,6 @@ type JmeterQScnrFieldS struct {
 	Description string `json:"Description"`
 }
 
-// для хранения ключей и создания карты по порогам и их описания
-// для сценариев, отличие в статусе сценария (Statut)
-type KeyField struct {
-	//порог
-	Value float64
-	//Описания порога
-	Description string
-	//Статус сценария на Jmeter
-	Statut string
-}
-
 // сруктура ошибок для анализа
 type LTError struct {
 	Name        string
@@ -213,14 +202,6 @@ type LTError struct {
 	Tag         string
 }
 type LTErrors []LTError
-
-// Структура с сценариев динамическим запросом
-type ScenarioDinamic struct {
-	NameTest   string
-	NameThread string
-	Field      []YField
-}
-type ScenarioDinamics []ScenarioDinamic
 
 // сруктура для вывода графиков
 type LTGrag struct {
@@ -238,40 +219,6 @@ type LTGrags []LTGrag
 
 // Формирование списка для динамических шаблонов
 type DinamicRecord map[string]string
-
-func AddMap(m map[string]map[string]KeyField, TestName, ErrorField string, val KeyField) map[string]map[string]KeyField {
-	mm, ok := m[TestName]
-	if !ok {
-		mm = make(map[string]KeyField)
-		m[TestName] = mm
-	}
-	mm[ErrorField] = val
-
-	return m
-}
-
-func AddMapS(m map[string]map[string]ScenarioDinamic, TestName, NameThread string, val ScenarioDinamic) map[string]map[string]ScenarioDinamic {
-	mm, ok := m[TestName]
-	if !ok {
-		mm = make(map[string]ScenarioDinamic)
-		m[TestName] = mm
-	}
-	mm[NameThread] = val
-
-	return m
-}
-
-// Методы для типа ScenarioDinamic
-func (p *ScenarioDinamic) SetApplication(NameTest string) {
-	p.NameTest = NameTest
-}
-func (p *ScenarioDinamic) SetThread(NameThread string) {
-	p.NameThread = NameThread
-}
-
-func (p *ScenarioDinamic) SeField(YF []YField) {
-	p.Field = append(p.Field, YF...)
-}
 
 func (lt *LTErrors) AddError(name string, threshold float64, description string, percentile float64, tp, tag string) {
 	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ": Threshold " + fmt.Sprint(threshold) + " - current " + strconv.Itoa(int(percentile)), Type: tp, Tag: tag}

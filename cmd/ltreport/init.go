@@ -13,6 +13,7 @@ import (
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
 	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
+	"github.com/egorkovalchuk/go-ltreport/internal/source/influx"
 )
 
 var (
@@ -125,7 +126,7 @@ func InitTime() {
 }
 
 func FindTimeWorkTest() (time.Time, time.Time) {
-	gc := reportdata.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", reportdata.BeginningOfDay(), reportdata.EndOfDay(), logs, debugm)
+	gc := influx.NewInfluxClient(cfg.Jmeter.JmeterInflux, "", reportdata.BeginningOfDay(), reportdata.EndOfDay(), logs, debugm)
 
 	infjson, err := gc.GetDataMean(url.QueryEscape("SELECT max(\"rate\") FROM \"delta\" WHERE" + " " + gc.Timeperiod + " " + "GROUP BY time(15m) fill(0)"))
 

@@ -1,36 +1,16 @@
-package reportdata
+package graphite
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"time"
 
 	"github.com/egorkovalchuk/go-ltreport/internal/logger"
+	"github.com/egorkovalchuk/go-ltreport/internal/reportdata"
 )
-
-// Datapoint представляет одну точку данных Graphite
-type Datapoint struct {
-	Value     float64
-	Timestamp int64
-}
-
-// MetricResponse представляет ответ Graphite API
-type MetricResponse struct {
-	Target     string      `json:"target"`
-	Datapoints []Datapoint `json:"datapoints"`
-}
-
-// GraphiteClient представляет клиент для работы с Graphite API
-type GraphiteClient struct {
-	baseURL string
-	client  *http.Client
-	auth    string
-	logs    *logger.LogWriter
-	debug   bool
-}
 
 // NewGraphiteClient создает новый экземпляр клиента
 func NewGraphiteClient(baseURL string, auth string, logs *logger.LogWriter, debug bool) *GraphiteClient {
@@ -67,7 +47,7 @@ func (gc *GraphiteClient) GetMetrics(target string, from, until time.Time) ([]Me
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		gc.logs.ProcessDebug("Get Graphite threshold request: " + requestURL)
 		return nil, fmt.Errorf("graphite API returned status %d: %s", resp.StatusCode, string(body))
 	}
@@ -123,7 +103,7 @@ func (gc *GraphiteClient) ListMetrics() ([]string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("graphite API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	var metrics []string
@@ -157,5 +137,5 @@ func (gc *GraphiteClient) Get99thPercentile(target string, from, until time.Time
 	}
 
 	// Вычисляем 99-й персентиль
-	return CalculatePercentile(values, 99), nil
+	return reportdata.CalculatePercentile(values, 99), nil
 }
