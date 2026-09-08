@@ -10,3 +10,4 @@ config.json
 config.json
 task
 internal/notify/notify_custom.go
+./cmd/test/*
