@@ -26,7 +26,7 @@ The project codebase is organized following idiomatic **Standard Go Project Layo
 ## 🔄 Workflow Pipeline
 Upon execution, the utility runs a sequential data collection and processing pipeline:
 
-
+```
 [Start main()] ──> [Parse CLI Flags] ──> [Read config.json]
 │
 └──> [Validate Dates & Create tmp/]
@@ -40,7 +40,7 @@ Upon execution, the utility runs a sequential data collection and processing pip
 └──> [Upload PDF to Confluence (Optional) + Push Archive to Allure]
 │
 └──> [Cleanup tmp/ (via -rm flag)] ──> [Send Notifications (if not -ban)] ──> [Exit]
-
+```
 
 ---
 
