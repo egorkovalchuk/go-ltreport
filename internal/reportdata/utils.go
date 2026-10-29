@@ -2,11 +2,15 @@ package reportdata
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -374,4 +378,35 @@ func EndOfHour() time.Time {
 	t := time.Now()
 	now := t.Hour()
 	return time.Date(t.Year(), t.Month(), t.Day(), now-1, 59, 59, int(time.Second-time.Nanosecond), time.Local)
+}
+
+func CheckCertificate(targetURL string) error {
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		return fmt.Errorf("неверный URL: %w", err)
+	}
+
+	host := u.Host
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		host = net.JoinHostPort(host, "443")
+	}
+
+	dialer := &tls.Dialer{
+		Config: &tls.Config{
+			// Здесь НЕ ставим InsecureSkipVerify: true, так как нам нужна честная проверка
+			ServerName: u.Hostname(),
+		},
+	}
+
+	// Устанавливаем таймаут на подключение
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "tcp", host)
+	if err != nil {
+		// Ошибка вернет конкретную причину (x509: certificate signed by unknown authority и т.д.)
+		return fmt.Errorf("ошибка TLS-верификации: %w", err)
+	}
+	defer conn.Close()
+
+	return nil
 }

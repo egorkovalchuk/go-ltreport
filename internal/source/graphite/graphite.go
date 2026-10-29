@@ -121,7 +121,16 @@ func (gc *GraphiteClient) Get99thPercentile(target string, from, until time.Time
 	}
 
 	if len(metrics) == 0 {
-		return 0, fmt.Errorf("No metrics found for target %s", target)
+		// повтор
+		for range 3 {
+			metrics, err = gc.GetMetrics(target, from, until)
+			if err != nil {
+				return 0, err
+			}
+		}
+		if len(metrics) == 0 {
+			return 0, fmt.Errorf("No metrics found for target %s", target)
+		}
 	}
 
 	// Собираем все значения

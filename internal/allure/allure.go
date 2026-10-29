@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -26,14 +27,23 @@ type Allure struct {
 	testcount  int
 }
 
-func NewAllure(on bool, userToken, BaseURL, path string) *Allure {
+func NewAllure(on bool, userToken, BaseURL, path, proxyurl string) *Allure {
+	tr := &http.Transport{
+		ResponseHeaderTimeout: 120 * time.Second,
+		IdleConnTimeout:       120 * time.Second}
+
+	if proxyurl != "" {
+		proxyUrl, _ := url.Parse(proxyurl)
+		tr.Proxy = http.ProxyURL(proxyUrl)
+	}
 	return &Allure{
 		on:        on,
 		userToken: userToken,
 		BaseURL:   BaseURL,
 		ProjectID: 367,
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   120 * time.Second,
+			Transport: tr,
 		},
 		path:      EnsureTrailingSeparator(path),
 		e:         make(chan *LogStruct),
@@ -105,8 +115,7 @@ func (a *Allure) Finish(zipFileName string, start, end time.Time, url string) er
 
 	err := a.GetToken()
 	if err != nil {
-		a.ProcessError("Error get token")
-		a.ProcessError(err)
+		a.ProcessError("Error get token: " + err.Error())
 		return err
 	}
 
@@ -254,24 +263,29 @@ func (a *Allure) GetToken() error {
 	formData.Set("token", a.userToken)
 
 	// Создаем запрос
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/uaa/oauth/token", a.BaseURL), bytes.NewBufferString(formData.Encode()))
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/uaa/oauth/token", a.BaseURL), strings.NewReader(formData.Encode()))
 	if err != nil {
 		return fmt.Errorf("Error creating query: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Expect", "")
+	//req.Header.Set("Expect", "")
+
+	//encodedData := formData.Encode()
+	//req.ContentLength = int64(len(encodedData))
+	req.Close = true
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return err
+		a.ProcessDebug(resp)
+		return fmt.Errorf("Do: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("Body: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {

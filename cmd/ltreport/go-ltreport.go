@@ -62,9 +62,10 @@ var (
 func main() {
 
 	// start program
-	var version, help bool
+	var version, help, console bool
 	flag.BoolVar(&debugm, "d", false, "Start debug mode")
 	flag.BoolVar(&version, "v", false, "Version")
+	flag.BoolVar(&console, "c", false, "Enable console output")
 	var confname string
 	flag.StringVar(&confname, "config", confFileName, "start with users config")
 	flag.StringVar(&LoginFSM, "fsmlogin", "", "HP Service Manager Login")
@@ -99,6 +100,7 @@ func main() {
 		go logs.LogWriteForGoRutineStruct()
 	})
 
+	logs.SetConsoleOutput(console)
 	logs.ProcessInfo("- - - - - - - - - - - - - - -")
 	logs.ProcessInfo("Start report")
 
@@ -142,7 +144,12 @@ func StartReport() {
 	fmt.Println("Start report")
 	logs.ProcessInfo("Report generation")
 
-	alluretmp = allure.NewAllure(cfg.Allure.ReportAllure, cfg.Allure.Token, cfg.Allure.ReportEndPoint, cfg.Allure.ReportPath)
+	err := reportdata.CheckCertificate(cfg.Allure.ReportEndPoint)
+	if err != nil {
+		logs.ProcessError(err)
+	}
+
+	alluretmp = allure.NewAllure(cfg.Allure.ReportAllure, cfg.Allure.Token, cfg.Allure.ReportEndPoint, cfg.Allure.ReportPath, cfg.Allure.ReportAllureProxy)
 	go func(ec <-chan *allure.LogStruct) {
 		for err := range ec {
 			t := err
@@ -209,7 +216,7 @@ func StartReport() {
 		allurelink = pdf.ReportDownload()
 	}
 
-	err := alluretmp.Finish("allure-report-"+time.Now().Format(cfg.ReportMask)+".zip", timeperiodstart, timeperiodend, cfg.Confluence.ReportConfluenceURL+allurelink)
+	err = alluretmp.Finish("allure-report-"+time.Now().Format(cfg.ReportMask)+".zip", timeperiodstart, timeperiodend, cfg.Confluence.ReportConfluenceURL+allurelink)
 	if err != nil {
 		logs.ProcessError(err)
 	}
@@ -249,7 +256,7 @@ func ReportInflux() {
 
 					if jj.Value > valthershold.Value {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
+						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), jj.Value, "Jmeter", "Jmeter")
 					}
 				}
 			}
@@ -263,7 +270,7 @@ func ReportInflux() {
 				if valthershold, okk := JMeterTestTh["*"][jj.Name]; okk {
 					if jj.Value > valthershold.Value {
 						logs.ProcessDebug(ii.NameTest + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), 0, "Jmeter", "Jmeter")
+						Problems.AddError(ii.NameTest, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest, int(jj.Value)), jj.Value, "Jmeter", "Jmeter")
 					}
 				}
 			}
@@ -363,7 +370,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh[ii.NameTest+":"+ii.NameThread][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), jj.Value, ii.NameTest, "Jmeter")
 						}
 					}
 				}
@@ -378,7 +385,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh["*:*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), jj.Value, ii.NameTest, "Jmeter")
 						}
 					}
 				}
@@ -392,7 +399,7 @@ func InfluxJmeterScenario() {
 
 						if jj.Value > valthershold.Value && jj.Statut == JMeterTestTh[ii.NameTest+":*"][jj.Name].Statut {
 							logs.ProcessDebug(ii.NameTest + ":" + ii.NameThread + " threshold: " + fmt.Sprint(valthershold.Value) + " current: " + strconv.Itoa(int(jj.Value)))
-							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), 0, ii.NameTest, "Jmeter")
+							Problems.AddError(ii.NameTest+":"+ii.NameThread, valthershold.Value, fmt.Sprintf(valthershold.Description, valthershold.Value, ii.NameTest+":"+ii.NameThread, int(jj.Value)), jj.Value, ii.NameTest, "Jmeter")
 						}
 					}
 				}
@@ -412,7 +419,7 @@ func GrafanaReport() {
 		// получение картинки
 		gc := grafana.NewGrafanaClient(i.Urlimg, i.AuthHeader, timeperiodstart, timeperiodend, logs, debugm)
 		logs.ProcessDebug("Get image request " + i.Urlimg + gc.Timeperiod)
-		ConType, err := gc.GetImage("tmp/", i.Name)
+		ConType, err := gc.GetImage("tmp/", replaceImageName(i.Name))
 		defer gc.Close()
 
 		if err != nil {
@@ -453,7 +460,7 @@ func GrafanaReport() {
 		rstallure.ArrayToLabelRoot("severity:critical;feature:"+i.ThDescription, "product")
 		rstallure.AddLink("Grafana", i.Urldash+gc.Timeperiod, "requirement")
 		rstallure.AddStep("Init request", "passed", timeperiodstart, timeperiodend)
-		err = rstallure.AddAttach(i.Name, allure.PNG, "tmp/"+i.Name+".png", nil)
+		err = rstallure.AddAttach(i.Name, allure.PNG, "tmp/"+replaceImageName(i.Name+".png"), nil)
 		if err != nil {
 			logs.ProcessError(err)
 		}
@@ -608,7 +615,7 @@ func GrafanaTemplateReport() {
 					logs.ProcessInfo(tmp_name + " " + strings.Join(line, ", ") + ": Threshold " + fmt.Sprint(i.Threshold) + " - current " + strconv.Itoa(int(percentile)))
 					Problems.AddError(tmp_name, i.Threshold, i.ThDescription, percentile, "Grafana", line[1])
 
-					ConType, erri := gc.GetImage("tmp/", tmp_name)
+					ConType, erri := gc.GetImage("tmp/", replaceImageName(tmp_name))
 					if erri != nil {
 						logs.ProcessError("Error generate image")
 						logs.ProcessError(erri)
@@ -622,7 +629,7 @@ func GrafanaTemplateReport() {
 						p.UrlDash = tmp_dash + gc.Timeperiod
 						LTGrafs = append(LTGrafs, p)
 						// Добавляем картинку в аллюр
-						erra := rstallure.AddAttach(tmp_name, allure.PNG, "tmp/"+tmp_name+".png", nil)
+						erra := rstallure.AddAttach(tmp_name, allure.PNG, "tmp/"+replaceImageName(tmp_name+".png"), nil)
 						if erra != nil {
 							logs.ProcessError(err)
 						}

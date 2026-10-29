@@ -54,7 +54,7 @@ func (p *GrafanaClient) GetImage(path, Name string) (string, error) {
 
 	//  проверяем получение картинки, статус 200
 	if rsp.StatusCode == http.StatusOK {
-		p.logs.ProcessDebug("Request image success " + Name)
+		p.logs.ProcessDebug("Request image success " + Name + ".png")
 
 		var n io.Reader
 		// io.Copy(io.Discard, rsp.Body)
@@ -271,7 +271,7 @@ func (p *GrafanaClient) GetVersionGrafana() (version int) {
 		p.logs.ProcessDebug(rsp.Body)
 		return 0
 	}
-	p.logs.ProcessDebug("Grafana version: " + tmp.Version)
+	// p.logs.ProcessDebug("Grafana version: " + tmp.Version)
 	return getMajorVersion(tmp.Version)
 }
 

@@ -238,3 +238,21 @@ func convertEncoding(str, des string) string {
 	}
 	return temp
 }
+
+func replaceImageName(str string) string {
+
+	var repltemplate []string
+	repltemplate = append(repltemplate, " ", "_")
+	repltemplate = append(repltemplate, "/", "_")
+	repltemplate = append(repltemplate, "\\", "_")
+
+	// Используем strings.NewReplacer для эффективной замены
+	replacer := strings.NewReplacer(repltemplate...)
+
+	temp, err := reportdata.ConvertEncoding([]byte(replacer.Replace(str)))
+	if err != nil {
+		temp = str
+		logs.ProcessError(fmt.Errorf("replaceImageName: %w", err))
+	}
+	return temp
+}

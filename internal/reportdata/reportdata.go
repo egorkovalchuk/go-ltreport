@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 )
@@ -18,10 +19,11 @@ type Config struct {
 	ReportPath string         `json:"ReportPath"`
 	Confluence ConfluenceType `json:"Confluence"`
 	Allure     struct {
-		ReportAllure   bool   `json:"ReportAllure"`
-		ReportEndPoint string `json:"ReportEndPoint"`
-		Token          string `json:"Token"`
-		ReportPath     string `json:"ReportPath"`
+		ReportAllure      bool   `json:"ReportAllure"`
+		ReportEndPoint    string `json:"ReportEndPoint"`
+		Token             string `json:"Token"`
+		ReportPath        string `json:"ReportPath"`
+		ReportAllureProxy string `json:"ReportAllureProxy,omitempty"`
 	} `json:"Allure"`
 	ReportIM struct {
 		Token      string `json:"Token"`
@@ -52,53 +54,59 @@ type Config struct {
 		ReportDash       bool `json:"ReportDash"`
 		ReportClickHouse bool `json:"ClickHouse"`
 	} `json:"ReportOn"`
-	Jmeter struct {
-		JmeterLoginInflux string `json:"JmeterLoginInflux"`
-		JmeterPassinflux  string `json:"JmeterPassInflux"`
-		//Подключение к инфлюксу jmeter
-		JmeterInflux string `json:"JmeterInflux"`
-		//запрос
-		JmeterQuery string `json:"JmeterQuery"`
-		//группировка
-		JmeterQueryGroup string `json:"JmeterQueryGroup"`
-		//Описание полей
-		JmeterQueryField []struct {
-			//имя поля
-			Name string `json:"Name"`
-			//Описание
-			Description string `json:"Description"`
-		} `json:"JmeterQueryField"`
-		//Тестовые сценари с порогами по ошибкам
-		JmeterQueryThreshold []struct {
-			//имя сценария
-			Name string `json:"Name"`
-			//Поле по которому смотрим пороги
-			ErrorField string `json:"ErrorField"`
-			//порог
-			Threshold float64 `json:"Threshold"`
-			//Описание порога
-			Description string `json:"Description"`
-		} `json:"JmeterQueryThreshold"`
-		JmeterQueryScenario      string              `json:"JmeterQueryScenario"`
-		JmeterQueryScnrGroup     string              `json:"JmeterQueryScnrGroup"`
-		JmeterQueryScnrField     []JmeterQScnrFieldS `json:"JmeterQueryScnrField"`
-		JmeterQueryScnrThreshold []struct {
-			//имя сценария
-			Name string `json:"Name"`
-			//имя нити
-			NameThread string `json:"NameThread"`
-			//Поле по которому смотрим порогиN
-			ErrorField string `json:"ErrorField"`
-			//Статус на Jmeter
-			Statut string `json:"Statut"`
-			//порог
-			Threshold float64 `json:"Threshold"`
-			//Описание порога
-			Description string `json:"Description"`
-		} `json:"JmeterQueryScnrThreshold"`
-	} `json:"Jmeter"`
+	JmeterConfig              string   `json:"JmeterConfig"`
+	GrafanadashConfig         []string `json:"GrafanadashConfig"`
+	GrafanadashTemplateConfig []string `json:"GrafanadashTemplateConfig"`
+	// Сохраняем поддержку старых версий
+	Jmeter              JMeterType                  `json:"Jmeter"`
 	Grafanadash         []GrafanaDashStruct         `json:"GrafanaDash"`
 	GrafanadashTemplate []GrafanadashTemplateStruct `json:"GrafanadashTemplate"`
+}
+
+type JMeterType struct {
+	JmeterLoginInflux string `json:"JmeterLoginInflux"`
+	JmeterPassinflux  string `json:"JmeterPassInflux"`
+	//Подключение к инфлюксу jmeter
+	JmeterInflux string `json:"JmeterInflux"`
+	//запрос
+	JmeterQuery string `json:"JmeterQuery"`
+	//группировка
+	JmeterQueryGroup string `json:"JmeterQueryGroup"`
+	//Описание полей
+	JmeterQueryField []struct {
+		//имя поля
+		Name string `json:"Name"`
+		//Описание
+		Description string `json:"Description"`
+	} `json:"JmeterQueryField"`
+	//Тестовые сценари с порогами по ошибкам
+	JmeterQueryThreshold []struct {
+		//имя сценария
+		Name string `json:"Name"`
+		//Поле по которому смотрим пороги
+		ErrorField string `json:"ErrorField"`
+		//порог
+		Threshold float64 `json:"Threshold"`
+		//Описание порога
+		Description string `json:"Description"`
+	} `json:"JmeterQueryThreshold"`
+	JmeterQueryScenario      string              `json:"JmeterQueryScenario"`
+	JmeterQueryScnrGroup     string              `json:"JmeterQueryScnrGroup"`
+	JmeterQueryScnrField     []JmeterQScnrFieldS `json:"JmeterQueryScnrField"`
+	JmeterQueryScnrThreshold []struct {
+		//имя сценария
+		Name string `json:"Name"`
+		//имя нити
+		NameThread string `json:"NameThread"`
+		//Поле по которому смотрим порогиN
+		ErrorField string `json:"ErrorField"`
+		//Статус на Jmeter
+		Statut string `json:"Statut"`
+		//порог
+		Threshold float64 `json:"Threshold"`
+		//Описание порога
+		Description string `json:"Description"`
+	} `json:"JmeterQueryScnrThreshold"`
 }
 
 type ConfluenceType struct {
@@ -221,7 +229,7 @@ type LTGrags []LTGrag
 type DinamicRecord map[string]string
 
 func (lt *LTErrors) AddError(name string, threshold float64, description string, percentile float64, tp, tag string) {
-	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ": Threshold " + fmt.Sprint(threshold) + " - current " + strconv.Itoa(int(percentile)), Type: tp, Tag: tag}
+	ltp := LTError{Name: "Grafana: " + name, Threshold: threshold, Description: description + ":\n Threshold " + fmt.Sprint(threshold) + " - current " + fmt.Sprint(percentile), Type: tp, Tag: tag}
 	*lt = append(*lt, ltp)
 }
 
@@ -238,18 +246,63 @@ func Helpstart() {
 
 // Чтение конфига
 func (cfg *Config) Readconf(confname string) error {
-	file, err := os.Open(confname)
+
+	file, err := openFile(confname)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
-	defer file.Close()
 
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&cfg)
+	err = json.Unmarshal(file, &cfg)
+
 	if err != nil {
-		fmt.Println(err)
-		return err
+		return errorJSON(err, file, confname)
+	}
+
+	if cfg.JmeterConfig != "" {
+		file, err = openFile(cfg.JmeterConfig)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(file, &cfg.Jmeter)
+		if err != nil {
+			return errorJSON(err, file, cfg.JmeterConfig)
+		}
+	}
+
+	if isEmptyStruct(cfg.Jmeter) {
+		fmt.Println("Jmeter bloks is empty")
+	}
+
+	if len(cfg.GrafanadashConfig) != 0 {
+		for _, i := range cfg.GrafanadashConfig {
+			file, err = openFile(i)
+			if err != nil {
+				return err
+			}
+			var tmp []GrafanaDashStruct
+			err = json.Unmarshal(file, &tmp)
+			if err != nil {
+				return errorJSON(err, file, i)
+			}
+
+			cfg.Grafanadash = append(cfg.Grafanadash, tmp...)
+		}
+	}
+
+	if len(cfg.GrafanadashTemplateConfig) != 0 {
+		for _, i := range cfg.GrafanadashTemplateConfig {
+			file, err = openFile(i)
+			if err != nil {
+				return err
+			}
+			var tmp []GrafanadashTemplateStruct
+			err = json.Unmarshal(file, &tmp)
+			if err != nil {
+				return errorJSON(err, file, i)
+			}
+
+			cfg.GrafanadashTemplate = append(cfg.GrafanadashTemplate, tmp...)
+		}
 	}
 
 	for i, j := range cfg.Grafanadash {
@@ -261,7 +314,13 @@ func (cfg *Config) Readconf(confname string) error {
 		cfg.Grafanadash[i].Threshold = th
 		cfg.Grafanadash[i].Comparison = com
 	}
-	file.Close()
+
+	for _, t := range cfg.GrafanadashTemplate {
+		if _, err := os.Stat(t.FileList); os.IsNotExist(err) {
+			fmt.Printf("Error:  file '%s' does not exist\n", t.FileList)
+		}
+
+	}
 	return nil
 }
 
@@ -308,4 +367,69 @@ func (cfg *Config) parseThreshold(in interface{}) (th float64, com string, err e
 	}
 
 	return th, com, nil
+}
+
+// offsetToLineCol вычисляет строку и колонку по смещению в байтах
+func offsetToLineCol(data []byte, offset int64) (line, col int) {
+	if offset < 0 {
+		return 1, 1
+	}
+	line = 1
+	col = 1 // колонки нумеруются с 1
+	// Проходим по каждому байту до указанного смещения (не включая offset)
+	for i := 0; i < int(offset) && i < len(data); i++ {
+		if data[i] == '\n' {
+			line++
+			col = 1 // после перевода строки новая колонка
+		} else {
+			col++
+		}
+	}
+	return line, col + 1 // +1 т.к. колонки начинаются с 1
+}
+
+func openFile(filename string) ([]byte, error) {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Error: config file '%s' does not exist\n", filename)
+	}
+
+	// Проверяем существование файла
+	if _, err := os.Stat(filename); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("Файл %s не существует\n", filename)
+		}
+		return nil, fmt.Errorf("Ошибка при проверке файла: %v\n", err)
+	}
+
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func errorJSON(err error, file []byte, confname string) error {
+	switch e := err.(type) {
+	case *json.SyntaxError:
+		line, col := offsetToLineCol(file, e.Offset)
+		return fmt.Errorf("JSON syntax error in file %s, line %d, column %d: %w",
+			confname, line, col, e)
+	case *json.UnmarshalTypeError:
+		line, col := offsetToLineCol(file, e.Offset)
+		return fmt.Errorf("Type error in file %s, line %d, column %d: field %q should be %v, got %v",
+			confname, line, col, e.Field, e.Type, e.Value)
+	default:
+		return fmt.Errorf("error reading config %s: %w", confname, err)
+	}
+}
+
+func isEmptyStruct(s interface{}) bool {
+	v := reflect.ValueOf(s)
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	// Создаем нулевое значение того же типа
+	zero := reflect.Zero(v.Type()).Interface()
+	return reflect.DeepEqual(s, zero)
 }

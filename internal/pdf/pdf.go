@@ -3,6 +3,7 @@ package pdf
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"time"
 
@@ -387,7 +388,7 @@ func (p *PDFWriter) GrafanaReportPDF(LTGrafs []reportdata.LTGrag) {
 	for _, i := range LTGrafs {
 
 		//сохранение переменных для второго и послед рисунков
-		file, err := os.Open("tmp/" + i.Name + ".png")
+		file, err := os.Open("tmp/" + replaceImageName(i.Name+".png"))
 		if err != nil {
 			p.logs.ProcessError(err)
 			continue
@@ -809,4 +810,16 @@ func (p *PDFWriter) ReportDownload() string {
 	}
 
 	return allurelink
+}
+
+func replaceImageName(str string) string {
+
+	var repltemplate []string
+	repltemplate = append(repltemplate, " ", "_")
+	repltemplate = append(repltemplate, "/", "_")
+	repltemplate = append(repltemplate, "\\", "_")
+
+	// Используем strings.NewReplacer для эффективной замены
+	replacer := strings.NewReplacer(repltemplate...)
+	return replacer.Replace(str)
 }

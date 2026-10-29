@@ -17,6 +17,7 @@ type LogWriter struct {
 	LogChannel  chan LogStruct
 	filer       *os.File
 	logFileName string
+	console     bool
 	debugm      bool
 }
 
@@ -43,6 +44,9 @@ func (l *LogWriter) LogWriteForGoRutineStruct() {
 		prefix := time.Now().Local().Format("2006/01/02 15:04:05") + " " + entry.t + ": "
 		l.logger.SetPrefix(prefix)
 		l.logger.Println(entry.text)
+		if l.console {
+			fmt.Println(prefix + fmt.Sprint(entry.text))
+		}
 	}
 }
 
@@ -112,4 +116,8 @@ func (l *LogWriter) ProcessLog(level string, logtext interface{}) {
 	default:
 		l.LogChannel <- LogStruct{level, logtext}
 	}
+}
+
+func (l *LogWriter) SetConsoleOutput(console bool) {
+	l.console = console
 }
