@@ -2,60 +2,70 @@
 	"ReportFilename": "LTReport",
 	"ReportMask":      "02012006",
 	"ReportPath": "/tmp",
+
+	// ============================================
+	// Подключение внешних конфигурационных файлов
+	// ============================================
+	// JmeterConfig — путь к внешнему JSON файлу с настройками JMeter
+	// Если указан, содержимое Jmeter в этом конфиге игнорируется
+	// "JmeterConfig": "jmeter.example.json",
+
+	// GrafanadashConfig — массив путей к внешним JSON файлам с настройками дашбордов
+	// Каждый файл должен содержать JSON-массив объектов GrafanadashStruct
+	// "GrafanadashConfig": [
+	// 	"grafana-dash.example.json"
+	// ],
+
+	// GrafanadashTemplateConfig — массив путей к внешним JSON файлам с шаблонами дашбордов
+	// Каждый файл должен содержать JSON-массив объектов GrafanadashTemplateStruct
+	// "GrafanadashTemplateConfig": [
+	// 	"grafana-template.example.json"
+	// ],
+
 	//Загрузка отчета на конфлюенс
 	"Confluence":{
 		"ReportConfluenceOn": true,
-		//Адрес конфлюенса
 		"ReportConfluenceURL":"https://confluence.com/",
 		"ReportConfluenceId":"926291954",
 		"ReportConfluenceSpace":"space",
 		"ReportConfluenceLogin":"login",
 		"ReportConfluencePass":"pass",
-		//авторизация по токену
 		"ReportConfluenceToken":"token",
 		"ReportConfluenceProxy":""
 	},
 	"Allure": {
-		"ReportAllure":true,,
+		"ReportAllure": true,
 		"ReportEndPoint":"https://allure.ru",
-		"Token":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",   
+		"Token":"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
 		"ReportPath":"allure-results/"
 	},
-	//Настройки для FSM
-	ReportIM" :{
-		"Token" : "",
-		"LoginFSM" :     "string",
-		"PassFSM" :   	 "string",
-		"FSMConnect": 	 "fsm.ru",
-		"FSMTU":      	 "string"
+	"ReportIM": {
+		"Token": "",
+		"LoginFSM": "string",
+		"PassFSM": "string",
+		"FSMConnect": "fsm.ru",
+		"FSMTU": "string"
 	},
-	//Настройки для ClickHouse
-	"ClickHouse" : {
-		"Server" : "localhost:1234"
-		"User" : "stress_test",
-		"Pass" : "",
-		"Token" : "",
-		"Query" : [
-			{ "sql" : "",
-			  "dbname" : "",
-			  "name": "" },
-			{ "sql" : "",
-			  "dbname" : "",
-			  "name": "" }
+	"ClickHouse": {
+		"Server": "localhost:1234",
+		"User": "stress_test",
+		"Pass": "",
+		"Token": "",
+		"Query": [
+			{ "sql": "", "dbname": "", "name": "" },
+			{ "sql": "", "dbname": "", "name": "" }
 		]
 	},
-	"ReportOn": { 
-			//Включить отчет из Jmeter
-			"ReportJmeter": true,
-            //Включить отчет из FSM
-			"ReportIM": true,
-            //Включить отчет по Сценариям
-			"ReportScenario": true,
-            //Включить отчет по дашбордам
-			"ReportDash": true,
-			"ClickHouse": false
-			},
-	"Jmeter": {
+	"ReportOn": {
+		"ReportJmeter": true,
+		"ReportIM": true,
+		"ReportScenario": true,
+		"ReportDash": true,
+		"ClickHouse": false
+	}
+	// Jmeter, GrafanaDash, GrafanadashTemplate — можно оставить здесь ИЛИ вынести во внешние файлы
+	// Рекомендуется использовать внешние файлы для удобства поддержки
+}
 			"JmeterInflux" :   "http://10.10.10.1:8086",
 			"LoginInflux" :   "",
 			"PassInflux" :    "",

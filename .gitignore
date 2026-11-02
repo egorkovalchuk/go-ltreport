@@ -4,7 +4,7 @@
 *.png
 *.rar
 *.zip
-*.json
+./*.json
 .vscode/launch.json
 config.json
 config.json

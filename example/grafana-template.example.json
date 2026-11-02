@@ -1,0 +1,38 @@
+[
+    {
+        "Name": "Server CPU Template",
+        "UrlDash": "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer Hash=",
+        "UrlPanel": "",
+        "UrlImg": "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
+        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /{{server}}/ AND \"cpu\" = 'cpu-total')",
+        "SourceType": 1,
+        "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
+        "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+        "Threshold": 90,
+        "ThDescription": "CPU threshold exceeded for {{name}}",
+        "Tag": "Product:Test;layer:system",
+        "Size": {"Width": 120, "Height": 50},
+        "ThresholdFilter": true,
+        "FileList": "servers.example.csv",
+        "FilePettern": "server;name"
+    },
+    {
+        "Name": "Disk IO Template",
+        "UrlDash": "https://grafana.ru/d/000000881/disk?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer Hash=",
+        "UrlPanel": "",
+        "UrlImg": "https://grafana.ru/render/d-solo/000000881/disk?height=500&orgId=1&panelId=15&refresh=5m&tz=Europe%2FMoscow&width=1000",
+        "Query": "SELECT percentile(\"disk_io\",95) FROM \"ret_30w\".\"disk\" WHERE (\"host\" =~ /{{server}}/) GROUP BY time(1d)",
+        "SourceType": 3,
+        "UrlQuery": "https://grafana.ru/api/datasources/proxy/461/query?db=graphite&q=",
+        "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+        "Threshold": ">500",
+        "ThDescription": "Disk IO threshold exceeded for {{name}}",
+        "Tag": "Product:Test;layer:infrastructure",
+        "Size": {"Width": 120, "Height": 50},
+        "ThresholdFilter": true,
+        "FileList": "servers.example.csv",
+        "FilePettern": "server;name"
+    }
+]

@@ -1,0 +1,38 @@
+[
+    {
+        "Name": "ESB CPU",
+        "UrlDash": "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer Hash=",
+        "UrlPanel": "",
+        "UrlImg": "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
+        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total')",
+        "SourceType": 1,
+        "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
+        "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+        "Threshold": 90,
+        "ThDescription": "CPU threshold exceeded",
+        "Tag": "Product:Test;layer:system",
+        "Size": {"Width": 120, "Height": 50},
+        "ThresholdFilter": false,
+        "FileList": "",
+        "FilePettern": ""
+    },
+    {
+        "Name": "Memory Usage",
+        "UrlDash": "https://grafana.ru/d/000000880/memory?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer Hash=",
+        "UrlPanel": "",
+        "UrlImg": "https://grafana.ru/render/d-solo/000000880/memory?height=500&orgId=1&panelId=12&refresh=5m&tz=Europe%2FMoscow&width=1000",
+        "Query": "SELECT percentile(\"usage_memory\",95) FROM \"ret_30w\".\"memory\" WHERE (\"host\" =~ /server_name/) GROUP BY time(1d)",
+        "SourceType": 2,
+        "UrlQuery": "https://grafana.ru/api/datasources/proxy/460/query?db=prometheus&q=",
+        "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+        "Threshold": ">90",
+        "ThDescription": "Memory threshold exceeded",
+        "Tag": "Product:Test;layer:infrastructure",
+        "Size": {"Width": 120, "Height": 50},
+        "ThresholdFilter": false,
+        "FileList": "",
+        "FilePettern": ""
+    }
+]
