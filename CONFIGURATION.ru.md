@@ -44,9 +44,10 @@
 ```json
 "Allure": {
     "ReportAllure": true,
-    "ReportEndPoint": "https://allure.ru",
+    "ReportEndPoint": "https://allure.company.com",
     "Token": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "ReportPath": "allure-results/"
+    "ReportPath": "allure-results/",
+    "ReportAllureProxy": ""
 }
 ```
 
@@ -55,6 +56,7 @@
 - `ReportEndPoint` - URL сервера Allure
 - `Token` - токен авторизации Allure
 - `ReportPath` - путь к результатам Allure
+- `ReportAllureProxy` - прокси для подключения к Allure
 
 ---
 
@@ -111,7 +113,7 @@
     "ReportIM": true, 
     "ReportScenario": true,
     "ReportDash": true,
-    "ClickHouse": false
+    "ClickHouse": true
 }
 ```
 
@@ -124,65 +126,55 @@
 
 ---
 
+## Внешние файлы конфигурации
+
+Конфигурация поддерживает вынос JMeter, Grafana Dashboards и Grafana Templates в отдельные файлы через поля `JmeterConfig`, `GrafanadashConfig` и `GrafanadashTemplateConfig`. Это позволяет поддерживать конфигурации модульными и переиспользуемыми.
+
+---
+
 ## Настройки JMeter
 ```json
 "Jmeter": {
     "JmeterInflux": "http://10.10.10.1:8086",
-    "LoginInflux": "",
-    "PassInflux": "",
+    "JmeterLoginInflux": "",
+    "JmeterPassInflux": "",
     "JmeterQuery": "SELECT mean(\"rate\"), mean(\"avg\"), mean(\"errpct\"), percentile(\"avg\", 95), max(\"avg\"), percentile(\"avg\", 50) FROM \"delta\" WHERE ",
     "JmeterQueryGroup": "GROUP BY \"suite\", time(1d) fill(0)",
-    
     "JmeterQueryField": [
-        {
-            "Name": "Rate",
-            "Description": "Averagate rate %d ops"
-        }
+        {"Name": "Rate", "Description": "Средняя пропускная способность %d ops"},
+        {"Name": "Avg", "Description": "Средняя задержка %d ms"},
+        {"Name": "ErrorPercent", "Description": "Ошибки %d %%"},
+        {"Name": "Percentile", "Description": "Перцентиль задержки %d ms"},
+        {"Name": "Maxlatency", "Description": "Максимальная задержка %d ms"},
+        {"Name": "Percentile50", "Description": "Перцентиль 50 %d ms"}
     ],
-    
     "JmeterQueryThreshold": [
-        {
-            "Name": "oapi-get",
-            "ErrorField": "ErrorPercent", 
-            "Threshold": 3,
-            "Description": "The error is higher %d in test %s current %d"
-        }
+        {"Name": "oapi-get", "ErrorField": "ErrorPercent", "Threshold": 3, "Description": "Превышен уровень ошибок %d в тесте %s текущий %d"}
     ],
-    
     "JmeterQueryScenario": "SELECT max(\"pct90.0\"), max(\"max\"), mean(\"count\") FROM \"details\" WHERE ",
     "JmeterQueryScnrGroup": " GROUP BY time(1d), \"application\", \"transaction\", \"statut\" fill(0) ORDER BY time DESC",
-    
     "JmeterQueryScnrField": [
-        {
-            "Name": "Percentile90",
-            "Description": "Percentile90 latency %d ms"
-        }
+        {"Name": "Percentile90", "Description": "Перцентиль 90 задержка %d ms"},
+        {"Name": "Maxlatency", "Description": "Максимальная задержка %d ms"},
+        {"Name": "Rate", "Description": "Средняя пропускная способность %d ops"}
     ],
-    
     "JmeterQueryScnrThreshold": [
-        {
-            "Name": "oapi_get",
-            "NameThread": "getToken",
-            "ErrorField": "Percentile90",
-            "Threshold": 5,
-            "Statut": "ok",
-            "Description": "The high latency %d ms in scenario %s current %d ms"
-        }
+        {"Name": "oapi_get", "NameThread": "getToken", "ErrorField": "Percentile90", "Threshold": 5, "Statut": "ok", "Description": "Высокая задержка %d ms в сценарии %s текущий %d ms"}
     ]
 }
 ```
 
 **Описание параметров JMeter:**
 - `JmeterInflux` - URL InfluxDB с метриками JMeter
-- `LoginInflux/PassInflux` - учетные данные InfluxDB
+- `JmeterLoginInflux/JmeterPassInflux` - учетные данные InfluxDB
 - `JmeterQuery` - основной запрос для получения метрик
 - `JmeterQueryGroup` - группировка для основного запроса
-- `JmeterQueryField` - описание полей результатов запроса
+- `JmeterQueryField` - описание полей результатов запроса (массив объектов Name + Description)
 - `JmeterQueryThreshold` - пороговые значения для проверки метрик
 - `JmeterQueryScenario` - запрос для анализа сценариев
 - `JmeterQueryScnrGroup` - группировка для запроса сценариев
-- `JmeterQueryScnrField` - описание полей сценариев
-- `JmeterQueryScnrThreshold` - пороговые значения для сценариев
+- `JmeterQueryScnrField` - описание полей сценариев (массив объектов Name + Description)
+- `JmeterQueryScnrThreshold` - пороговые значения для сценариев (поддерживает NameThread, Statut для фильтрации)
 
 ---
 
@@ -191,21 +183,21 @@
 "GrafanaDash": [
     {
         "Name": "ESB CPU",
-        "UrlDash": "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
-        "AuthHeader": "Bearer Hash=",
+        "UrlDash": "https://grafana.company.com/d/000000879/wf?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer token-value",
         "UrlPanel": "",
-        "UrlImg": "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
-        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') ",
+        "UrlImg": "https://grafana.company.com/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88",
+        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name/) ",
         "SourceType": 1,
-        "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
+        "UrlQuery": "https://grafana.company.com/api/datasources/proxy/459/query?db=telegraf&q=",
         "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
         "Threshold": 90,
-        "ThDescription": "CPU jopa",
-        "Tag": "Product",
-        "Size": {
-            "Width": 120,
-            "Height": 50
-        }
+        "ThDescription": "Превышен порог CPU",
+        "Tag": "Product:Test;layer:system",
+        "Size": {"Width": 120, "Height": 50},
+        "ThresholdFilter": false,
+        "FileList": "",
+        "FilePettern": ""
     }
 ]
 ```
@@ -219,10 +211,13 @@
 - `SourceType` - тип источника данных (1-telegraf, 2-prometheus, 3-graphite)
 - `UrlQuery` - URL для выполнения запросов к данным
 - `UrlQueryGroup` - группировка для запросов
-- `Threshold` - пороговое значение для триггера, может принимать на вход условие сравнения, например "<10" - меньше 10
+- `Threshold` - пороговое значение для триггера, может принимать на вход условие сравнения, например "<10" - меньше 10, или ">90" - больше 90
 - `ThDescription` - описание порога
-- `Tag` - тег для категоризации
+- `Tag` - тег для категоризации, формат `key:value;key:value` (передаётся в Allure как Label)
 - `Size` - размер изображения в отчете (ширина x высота)
+- `ThresholdFilter` - показывать график только при срабатывании порога
+- `FileList` - файл со списком элементов для массовой генерации
+- `FilePettern` - шаблон для именовании элементов в FileList
 
 ---
 
@@ -230,31 +225,28 @@
 ```json
 "GrafanadashTemplate": [
     {
-        "Name": "ESB CPU",
-        "UrlDash": "https://grafana.ru/d/000000879/wf?orgId=1&refresh=5m",
-        "AuthHeader": "Bearer Hash=",
+        "Name": "ESB CPU Template",
+        "UrlDash": "https://grafana.company.com/d/000000879/wf?orgId=1&refresh=5m",
+        "AuthHeader": "Bearer token-value",
         "UrlPanel": "",
-        "UrlImg": "https://grafana.ru/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88&refresh=5m&tz=Europe%2FMoscow&width=1000",
-        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name[0-2]{1}[0-9]{1}/ AND \"cpu\" = 'cpu-total') ",
+        "UrlImg": "https://grafana.company.com/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88",
+        "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name/) ",
         "SourceType": 1,
-        "UrlQuery": "https://grafana.ru/api/datasources/proxy/459/query?db=telegraf&q=",
+        "UrlQuery": "https://grafana.company.com/api/datasources/proxy/459/query?db=telegraf&q=",
         "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
         "Threshold": 90,
-        "ThDescription": "CPU jopa",
-        "Size": {
-            "Width": 120,
-            "Height": 50
-        },
+        "ThDescription": "Превышен порог CPU",
+        "Tag": "Product:Test",
+        "Size": {"Width": 120, "Height": 50},
         "ThresholdFilter": true,
-        "Tag": "Product",
-        "FileList": "1.csv",
+        "FileList": "templates.csv",
         "FilePettern": "server;name"
     }
 ]
 ```
 
 **Дополнительные параметры шаблонов:**
-- `Tag` - Описывает данные Label для Allure в формате key:value;ke:value...
+- `Tag` - Описывает данные Label для Allure в формате key:value;key:value...
 - `ThresholdFilter` - показывать график только при превышении порога
-- `FileList` - файл со списком элементов для шаблона
-- `FilePettern` - шаблон для именования файлов
+- `FileList` - файл со списком элементов для шаблона (CSV с разделителем по умолчанию `;`)
+- `FilePettern` - шаблон для именовании файлов, формат `column1;column2` (имена столбцов в CSV, используемых для генерации)

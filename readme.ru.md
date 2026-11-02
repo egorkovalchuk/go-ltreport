@@ -5,24 +5,36 @@
 
 ## 🚀 Ключевые возможности
 
-- **Мультиплатформенный сбор метрик:** Интеграция с InfluxDB (JMeter), Grafana, ClickHouse, Prometheus, Graphite и HP Service Manager (HPSM).
-- **Умная аналитика превышений:** Автоматический анализ метрик по заданным пороговым значениям (thresholds) как для тестов целиком, так и по отдельным сценариям/транзакциям.
+- **Мультиплатформенный сбор метрик:** Интеграция с InfluxDB (JMeter), Grafana, ClickHouse, Prometheus, Graphite, Telegraf и HP Service Manager (HPSM/FSM).
+- **Умная аналитика превышений:** Автоматический анализ метрик по заданным пороговым значениям (thresholds) как для тестов целиком, так и по отдельным сценариям/транзакциям. Поддержка операторов сравнения (`>` и `<`).
 - **Наглядные PDF-отчеты:** Генерация полноценных документов, содержащих интерактивные графики (скриншоты панелей Grafana), таблицы инцидентов и детальный анализ сценариев нагрузочного тестирования.
-- **Шаблонизация Grafana (CSV):** Поддержка массовой параллельной генерации графиков по шаблону на основе входных CSV-файлов.
-- **Автоматизация Confluence:** Автоматическая выгрузка отчетов на целевые страницы Confluence в виде дочерних страниц с прикрепленным PDF-файлом.
-- **Интеграция с Allure Framework:** Результаты проверок каждого порога могут экспортироваться в Allure в виде тест-кейсов со статусами `passed`, `failed` или `broken`.
+- **Шаблонизация Grafana (CSV):** Поддержка массовой параллельной генерации графиков по шаблону на основе входных CSV-файлов. Опциональная настройка `ThresholdFilter` — показывать графики только при срабатывании порога.
+- **Автоматизация Confluence:** Автоматическая выгрузка отчетов на целевые страницы Confluence в виде дочерних страниц с прикрепленным PDF-файлом. Поддержка аутентификации по паролю и токену.
+- **Интеграция с Allure Framework:** Результаты проверок каждого порога могут экспортироваться в Allure в виде тест-кейсов со статусами `passed`, `failed` или `broken` с прикрепленными артефактами.
+- **Поддержка нескольких кодировок:** Автоматическое определение и конвертация Windows-1251, KOI8-R, ISO-8859-5 и UTF-8.
+- **Внешние файлы конфигурации:** Поддержка загрузки конфигураций JMeter, Grafana Dashboards и Grafana Templates из отдельных JSON-файлов через поля `JmeterConfig`, `GrafanadashConfig` и `GrafanadashTemplateConfig`.
 
 ## 📐 Архитектура проекта и кодовой базы
 
 Кодовая база проекта организована в соответствии с практиками разработки **Standard Go Project Layout**:
 
-* **`cmd/ltreport/`** — Точка входа в приложение. Содержит файл `go-ltreport.go`, отвечает за парсинг флагов CLI, инициализацию конфигурации, логгера и запуск основного процесса.
+* **`cmd/ltreport/`** — Точка входа в приложение. Содержит `go-ltreport.go` (основной обработчик CLI, оркестрация отчетов) и `init.go` (инициализация переменных, обработка времени, управление временными файлами).
 * **`internal/`** — Приватный изолированный код приложения.
-  * `internal/config/` — Логика чтения и валидации конфигурационного файла.
-  * `internal/source/` — Модули и адаптеры для подключения к источникам метрик (InfluxDB, ClickHouse, Prometheus, Graphite, Grafana).
+  * `internal/reportdata/` — Основные структуры данных, загрузка конфигурации, валидация, парсинг порогов и утилиты.
+  * `internal/source/` — Модули и адаптеры для подключения к источникам метрик.
+    * `internal/source/influx/` — Клиент InfluxDB (JMeter).
+    * `internal/source/grafana/` — Клиент Grafana (дашборды и алерты).
+    * `internal/source/prometheus/` — Клиент Prometheus.
+    * `internal/source/graphite/` — Клиент Graphite API.
+    * `internal/source/telegraf/` — Клиент Telegraf.
+    * `internal/source/clickhouse/` — Клиент ClickHouse.
   * `internal/pdf/` — Движок генерации отчетов и рендеринга таблиц/графиков в PDF.
   * `internal/allure/` — Клиент для интеграции и отправки результатов в Allure.
-  * `internal/hpsm/` — Клиент для интеграции с HP Service Manager.
+  * `internal/confluence/` — Клиент API Confluence для создания страниц и прикрепления PDF.
+  * `internal/hpsm/` — Клиент для интеграции с HP Service Manager (FSM).
+  * `internal/logger/` — Структурированное логирование с записью в файл и опциональным выводом в консоль.
+  * `internal/notify/` — Модуль отправки уведомлений.
+  * `internal/fonts/` — Встроенные шрифты (варианты Times New Roman) для рендеринга PDF.
 * **`example/`** — Примеры конфигурационных файлов и шаблонов для быстрого старта.
 
 ## 🔄 Процесс работы утилиты (Workflow Pipeline)
@@ -55,18 +67,21 @@
 | `-config` | string | `config.json` | Путь к пользовательскому конфигурационному файлу приложения. |
 | `-d` | boolean | `false` | Активация режима отладки (`debug mode`) с расширенным логированием. |
 | `-v` | boolean | `false` | Вывод текущей версии утилиты (Текущая версия: `0.6.0.2`). |
+| `-h` | boolean | `false` | Вывод встроенной справки и списка доступных флагов. |
+| `-c` | boolean | `false` | Включает вывод в консоль дополнительно к файлу логирования. |
 | `-hour` | boolean | `false` | Генерация автоматического почасового отчета за прошедший час. |
-| `-start` | string | `""` | Дата начала отчета в формате `YYYY.MM.DD HH:MM` (например, `"2026.01.31 15:00"`). |
-| `-end` | string | `""` | Дата окончания отчета в формате `YYYY.MM.DD HH:MM`. |
-| `-rm` | boolean | `false` | Автоматическое удаление временных файлов (каталог `tmp/`) после генерации. |
+| `-start` | string | `""` | Дата начала отчета в формате `2006.01.02 15:04` (например, `"2026.01.31 15:00"`). |
+| `-end` | string | `""` | Дата окончания отчета в формате `2006.01.02 15:04` (например, `"2026.01.31 18:00"`). |
+| `-rm` | boolean | `false` | Автоматическое удаление временных PNG-файлов после генерации отчета. |
 | `-ban` | boolean | `false` | Запрет на отправку уведомлений об отчете по завершении работы. |
-| `-CHUser` | string | `""` | Имя пользователя ClickHouse (переопределяет значение из конфига). |
-| `-CHPassword`| string | `""` | Пароль пользователя ClickHouse (переопределяет значение из конфига). |
-| `-ConfToken` | string | `""` | Токен доступа к Confluence (переопределяет значение из конфига). |
-| `-conflproxy`| string | `""` | Прокси для подключения к Confluence в формате `http://user:password@url:port`. |
-| `-fsmlogin` | string | `""` | Логин для интеграции с HP Service Manager (FSM). |
-| `-fsmpass` | string | `""` | Пароль для интеграции с HP Service Manager (FSM). |
-| `-h` | boolean | `false` | Вывод встроенной справки и хелпа по утилите. |
+| `-fsmlogin` | string | `""` | Переопределяет логин FSM/HP Service Manager из конфигурационного файла. |
+| `-fsmpass` | string | `""` | Переопределяет пароль FSM/HP Service Manager из конфигурационного файла. |
+| `-conflproxy` | string | `""` | Устанавливает прокси для Confluence (формат: `http://user:password@host:port`). |
+| `-ConfToken` | string | `""` | Переопределяет токен авторизации Confluence из конфигурационного файла. |
+| `-CHUser` | string | `""` | Переопределяет имя пользователя ClickHouse из конфигурационного файла. |
+| `-CHPassword` | string | `""` | Переопределяет пароль ClickHouse из конфигурационного файла. |
+
+> **Примечание:** Флаги `-fsmlogin`, `-fsmpass`, `-conflproxy`, `-ConfToken`, `-CHUser` и `-CHPassword` имеют приоритет над значениями, указанными в конфигурационном файле.
 
 ---
 
@@ -93,16 +108,72 @@
   },
   "jmeter": {
     "jmeter_influx": "http://localhost:8086",
-    "jmeter_query": "SELECT mean(value) FROM...",
+    "jmeter_login_influx": "",
+    "jmeter_pass_influx": "",
+    "jmeter_query": "SELECT mean(\"rate\"), mean(\"avg\"), mean(\"errpct\"), percentile(\"avg\", 95), max(\"avg\"), percentile(\"avg\", 50) FROM \"delta\" WHERE ",
+    "jmeter_query_group": "GROUP BY \"suite\", time(1d) fill(0)",
+    "jmeter_query_field": [
+      {"Name": "Rate", "Description": "Средняя пропускная способность %d ops"},
+      {"Name": "Avg", "Description": "Средняя задержка %d ms"},
+      {"Name": "ErrorPercent", "Description": "Ошибки %d %%"},
+      {"Name": "Percentile", "Description": "Перцентиль задержки %d ms"},
+      {"Name": "Maxlatency", "Description": "Максимальная задержка %d ms"},
+      {"Name": "Percentile50", "Description": "Перцентиль 50 %d ms"}
+    ],
     "jmeter_query_threshold": [
-      {
-        "name": "*",
-        "error_field": "error_rate",
-        "threshold": 1.0,
-        "description": "Превышен порог ошибок! Допустимо: %f, Текущее: %d в тесте %s"
-      }
+      {"Name": "oapi-get", "ErrorField": "ErrorPercent", "Threshold": 3, "Description": "Превышен уровень ошибок %d в тесте %s текущий %d"}
+    ],
+    "jmeter_query_scenario": "SELECT max(\"pct90.0\"), max(\"max\"), mean(\"count\") FROM \"details\" WHERE ",
+    "jmeter_query_scrn_group": " GROUP BY time(1d), \"application\", \"transaction\", \"statut\" fill(0) ORDER BY time DESC",
+    "jmeter_query_scrn_field": [
+      {"Name": "Percentile90", "Description": "Перцентиль 90 задержка %d ms"},
+      {"Name": "Maxlatency", "Description": "Максимальная задержка %d ms"},
+      {"Name": "Rate", "Description": "Средняя пропускная способность %d ops"}
+    ],
+    "jmeter_query_scrn_threshold": [
+      {"Name": "oapi_get", "NameThread": "getToken", "ErrorField": "Percentile90", "Threshold": 5, "Statut": "ok", "Description": "Высокая задержка %d ms в сценарии %s текущий %d ms"}
     ]
   },
+  "grafana_dash": [
+    {
+      "Name": "ESB CPU",
+      "UrlDash": "https://grafana.company.com/d/000000879/wf?orgId=1&refresh=5m",
+      "AuthHeader": "Bearer token-value",
+      "UrlPanel": "",
+      "UrlImg": "https://grafana.company.com/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88",
+      "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name/) ",
+      "SourceType": 1,
+      "UrlQuery": "https://grafana.company.com/api/datasources/proxy/459/query?db=telegraf&q=",
+      "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+      "Threshold": 90,
+      "ThDescription": "Превышен порог CPU",
+      "Tag": "Product:Test;layer:system",
+      "Size": {"Width": 120, "Height": 50},
+      "ThresholdFilter": false,
+      "FileList": "",
+      "FilePettern": ""
+    }
+  ],
+  "grafanadash_template": [
+    {
+      "Name": "ESB CPU Template",
+      "UrlDash": "https://grafana.company.com/d/000000879/wf?orgId=1&refresh=5m",
+      "AuthHeader": "Bearer token-value",
+      "UrlPanel": "",
+      "UrlImg": "https://grafana.company.com/render/d-solo/000000879/wf?height=500&orgId=1&panelId=88",
+      "Query": "SELECT percentile(\"usage_active\",95) FROM \"ret_30w\".\"cpu\" WHERE (\"host\" =~ /server_name/) ",
+      "SourceType": 1,
+      "UrlQuery": "https://grafana.company.com/api/datasources/proxy/459/query?db=telegraf&q=",
+      "UrlQueryGroup": "GROUP BY time(1d) fill(none)",
+      "Threshold": 90,
+      "ThDescription": "Превышен порог CPU",
+      "Tag": "Product:Test",
+      "Size": {"Width": 120, "Height": 50},
+      "ThresholdFilter": true,
+      "FileList": "templates.csv",
+      "FilePettern": "server;name"
+    }
+  ],
   "clickhouse": {
     "server": "ch-server.local:8123",
     "user": "default",
@@ -124,15 +195,26 @@
 ```
 
 ### Валидация метрик Grafana в коде:
-Для графиков Grafana утилита поддерживает два механизма контроля:
-1. **По условию (`Comparison`):** Сравнивает возвращаемый из источника перцентиль с порогом `Threshold` по операторам `>` или `<`.
-2. **По встроенным алертам (`AlertID`):** Если передан ID алерта, утилита запрашивает его историю из Grafana и фиксирует инцидент при его срабатывании.
+Движок применяет две различные стратегии оценки для целей дашборда Grafana:
+1. **Условные выражения (`Comparison`):** Проверяет, нарушают ли значения перцентиля из исходной базы данных настройку `Threshold`, основываясь на условных операторах (`>` или `<`). Поле `Threshold` может быть либо числовым значением (по умолчанию используется сравнение `>`), либо строкой вроде `"<10"` или `">90"` для явного задания оператора сравнения.
+2. **Встроенные алерты дашборда (`AlertID`):** При указании ID алерта движок отслеживает историю состояний в Grafana и регистрирует критический инцидент, если обнаружен активный алерт.
+
+### Справочник типов источников для дашбордов Grafana:
+| SourceType | Источник данных |
+|:---:|---|
+| `1` | Telegraf / InfluxDB |
+| `2` | Prometheus |
+| `3` | Graphite |
+
+---
+
+> **Примечание:** Конфигурация поддерживает внешние файлы для JMeter, Grafana Dashboards и Grafana Templates через поля `JmeterConfig`, `GrafanadashConfig` и `GrafanadashTemplateConfig` соответственно. Это позволяет поддерживать конфигурации модульными.
 
 ---
 
 ## 🛠 Сборка проекта
 
-Для компиляции проекта вам понадобятся установленный **Go 1.18+** и утилита `make`.
+Для компиляции проекта вам понадобятся установленный **Go 1.24+** и утилита `make`.
 
 * **Сборка бинарного файла:**
   ```bash
@@ -170,10 +252,12 @@
 
 ## 🤝 Интеграция с Confluence
 
-При включении флага `report_confluence_on` утилита:
-1. Автоматически создает дочернюю страницу в Confluence относительно указанного `parent_page_id`.
-2. Оформляет текстовую часть отчета и прикрепляет сгенерированный PDF-файл к странице.
-3. Возвращает ссылку на публикацию, которая также прикрепляется к отчету Allure.
+Включение опции `ReportConfluenceOn` запускает следующий цикл публикации:
+1. Создаёт вложенную дочернюю страницу в структуре вашего пространства Confluence под назначенным `ReportConfluenceId`.
+2. Форматирует содержимое markdown на теле новой страницы и прикрепляет мастер-файл PDF-отчета.
+3. Генерирует live-ссылку на публикацию, которая автоматически синхронизируется и добавляется к вашим тестовым запускам в Allure.
+
+Аутентификация поддерживает как **метод на основе пароля** (`ReportConfluenceLogin` / `ReportConfluencePass`), так и **метод на основе токена** (`ReportConfluenceToken`). Прокси можно указать через `ReportConfluenceProxy`.
 
 ---
 
